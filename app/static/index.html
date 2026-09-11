@@ -33,24 +33,29 @@
       const sql = sqlBox.value.trim();
       if (!sql) return;
 
-      let response;
+      runButton.disabled = true;
       try {
-        response = await fetch('/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sql })
-        });
-      } catch (err) {
-        errorBox.textContent = 'Request failed: ' + err;
-        return;
-      }
+        let response, body;
+        try {
+          response = await fetch('/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sql })
+          });
+          body = await response.json();
+        } catch (err) {
+          errorBox.textContent = 'Request failed: ' + err;
+          return;
+        }
 
-      const body = await response.json();
-      if (!response.ok) {
-        errorBox.textContent = body.detail || 'Query failed';
-        return;
+        if (!response.ok) {
+          errorBox.textContent = body.detail || 'Query failed';
+          return;
+        }
+        renderResults(body.columns, body.rows);
+      } finally {
+        runButton.disabled = false;
       }
-      renderResults(body.columns, body.rows);
     }
 
     function renderResults(columns, rows) {
