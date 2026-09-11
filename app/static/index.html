@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>lakehouse-ui</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 960px; }
+    textarea { width: 100%; height: 8rem; font-family: monospace; font-size: 0.9rem; }
+    button { margin-top: 0.5rem; padding: 0.5rem 1.5rem; }
+    table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 0.3rem 0.6rem; text-align: left; }
+    #error { color: #b00020; margin-top: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>lakehouse-ui</h1>
+  <p>Query the <code>lakehouse</code> Iceberg catalog. Read-only.</p>
+  <textarea id="sql" placeholder="SELECT * FROM nyc_taxi.trips LIMIT 10"></textarea>
+  <br>
+  <button id="run">Run</button>
+  <div id="error"></div>
+  <table id="results"></table>
+
+  <script>
+    const runButton = document.getElementById('run');
+    const sqlBox = document.getElementById('sql');
+    const errorBox = document.getElementById('error');
+    const resultsTable = document.getElementById('results');
+
+    async function runQuery() {
+      errorBox.textContent = '';
+      resultsTable.innerHTML = '';
+      const sql = sqlBox.value.trim();
+      if (!sql) return;
+
+      let response;
+      try {
+        response = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sql })
+        });
+      } catch (err) {
+        errorBox.textContent = 'Request failed: ' + err;
+        return;
+      }
+
+      const body = await response.json();
+      if (!response.ok) {
+        errorBox.textContent = body.detail || 'Query failed';
+        return;
+      }
+      renderResults(body.columns, body.rows);
+    }
+
+    function renderResults(columns, rows) {
+      const thead = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      columns.forEach((c) => {
+        const th = document.createElement('th');
+        th.textContent = c;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      resultsTable.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        row.forEach((value) => {
+          const td = document.createElement('td');
+          td.textContent = value === null ? 'NULL' : String(value);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      resultsTable.appendChild(tbody);
+    }
+
+    runButton.addEventListener('click', runQuery);
+    sqlBox.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runQuery();
+    });
+  </script>
+</body>
+</html>

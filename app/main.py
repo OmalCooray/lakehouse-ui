@@ -1,12 +1,17 @@
 """lakehouse-ui: a minimal query UI for the MinIO/Iceberg/Polaris/DuckDB stack."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.catalog import CatalogConfigError, build_connection
 
 app = FastAPI(title="lakehouse-ui")
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 _READ_ONLY_PREFIXES = ("select", "with", "show", "describe", "explain", "pragma")
 
@@ -42,6 +47,11 @@ def _is_single_statement(sql: str) -> bool:
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.post("/query", response_model=QueryResponse)
