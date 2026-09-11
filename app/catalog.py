@@ -73,7 +73,8 @@ def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConn
         "CREATE OR REPLACE SECRET polaris_secret ("
         "TYPE iceberg, "
         f"CLIENT_ID '{_sql_quote(client_id)}', "
-        f"CLIENT_SECRET '{_sql_quote(client_secret)}'"
+        f"CLIENT_SECRET '{_sql_quote(client_secret)}', "
+        f"ENDPOINT '{_sql_quote(endpoint)}'"
         ")"
     )
     conn.execute(

@@ -71,7 +71,8 @@ def test_build_connection_installs_extensions_and_attaches(monkeypatch):
         "CREATE OR REPLACE SECRET polaris_secret ("
         "TYPE iceberg, "
         "CLIENT_ID 'lakehouse-ui', "
-        "CLIENT_SECRET 's3cr3t'"
+        "CLIENT_SECRET 's3cr3t', "
+        "ENDPOINT 'http://polaris.lakehouse.svc.cluster.local:8181/api/catalog'"
         ")",
         "ATTACH 'lakehouse' AS \"lakehouse\" ("
         "TYPE iceberg, "
