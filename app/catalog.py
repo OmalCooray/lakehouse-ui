@@ -42,6 +42,11 @@ def _sql_quote(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _sql_identifier(value: str) -> str:
+    """Escape a value for embedding as a double-quoted SQL identifier."""
+    return '"' + value.replace('"', '""') + '"'
+
+
 def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConnection:
     """Return a DuckDB connection with the Polaris catalog attached.
 
@@ -49,9 +54,11 @@ def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConn
     in-memory DuckDB connection — this is what makes the attach logic
     testable with a stub in place of real DuckDB/network calls.
     """
-    endpoint, client_id, client_secret, catalog = (
-        _require_env(name) for name in _REQUIRED_ENV_VARS
-    )
+    env = {name: _require_env(name) for name in _REQUIRED_ENV_VARS}
+    endpoint = env["POLARIS_ENDPOINT"]
+    client_id = env["POLARIS_CLIENT_ID"]
+    client_secret = env["POLARIS_CLIENT_SECRET"]
+    catalog = env["POLARIS_CATALOG"]
 
     if conn is None:
         import duckdb
@@ -70,7 +77,7 @@ def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConn
         ")"
     )
     conn.execute(
-        f"ATTACH '{_sql_quote(catalog)}' AS {catalog} ("
+        f"ATTACH '{_sql_quote(catalog)}' AS {_sql_identifier(catalog)} ("
         "TYPE iceberg, "
         f"ENDPOINT '{_sql_quote(endpoint)}', "
         "ACCESS_DELEGATION_MODE 'vended_credentials'"
