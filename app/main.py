@@ -8,7 +8,7 @@ from app.catalog import CatalogConfigError, build_connection
 
 app = FastAPI(title="lakehouse-ui")
 
-_READ_ONLY_PREFIXES = ("select", "with", "show", "describe", "explain", "pragma", "call")
+_READ_ONLY_PREFIXES = ("select", "with", "show", "describe", "explain", "pragma")
 
 
 class QueryRequest(BaseModel):
@@ -28,6 +28,17 @@ def _is_read_only(sql: str) -> bool:
     return first_word in _READ_ONLY_PREFIXES
 
 
+def _is_single_statement(sql: str) -> bool:
+    # Heuristic: strip at most one trailing semicolon, then reject if any
+    # semicolon remains. This will also reject a query containing a literal
+    # ";" inside a quoted string literal, but a false positive is the safe
+    # direction for a security guard here.
+    body = sql.strip()
+    if body.endswith(";"):
+        body = body[:-1]
+    return ";" not in body
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok"}
@@ -43,11 +54,20 @@ def run_query(request: QueryRequest) -> QueryResponse:
             detail="only read-only statements are allowed "
             f"({', '.join(_READ_ONLY_PREFIXES)})",
         )
+    if not _is_single_statement(request.sql):
+        raise HTTPException(
+            status_code=400,
+            detail="only a single statement is allowed",
+        )
 
     try:
         connection = build_connection()
     except CatalogConfigError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"failed to connect to catalog: {exc}"
+        ) from exc
 
     try:
         result = connection.execute(request.sql)
