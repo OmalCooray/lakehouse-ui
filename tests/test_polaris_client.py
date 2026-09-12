@@ -127,7 +127,11 @@ def test_get_principal_roles_returns_role_names(monkeypatch):
     )
 
     result = get_principal_roles(
-        "http://polaris:8181/api/management", "root", "rootsecret", "loader"
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "loader",
     )
 
     assert result == ["loader_role"]
@@ -151,12 +155,48 @@ def test_get_principal_roles_uses_the_v1_management_api_path(monkeypatch):
 
     monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
 
-    get_principal_roles("http://polaris:8181/api/management", "root", "rootsecret", "loader")
+    get_principal_roles(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "loader",
+    )
 
     assert (
         "http://polaris:8181/api/management/v1/principals/loader/principal-roles"
         in requested_urls
     )
+
+
+def test_get_principal_roles_fetches_its_oauth_token_from_the_catalog_endpoint(monkeypatch):
+    # Regression test: get_principal_roles used to fetch its OAuth token
+    # from `management_endpoint` (the only endpoint it received). Polaris
+    # does not expose /v1/oauth/tokens under the Management API base path
+    # — only under the Catalog API base path — confirmed live: a 404. This
+    # asserts the token request specifically hits catalog_endpoint, not
+    # management_endpoint, so this can't silently regress back to using a
+    # single endpoint for both.
+    requested_urls = []
+
+    def _urlopen(request, timeout=10):
+        requested_urls.append(request.full_url)
+        if "oauth/tokens" in request.full_url:
+            return _response(TOKEN_RESPONSE)
+        return _response({"roles": []})
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    get_principal_roles(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "loader",
+    )
+
+    assert "http://polaris:8181/api/catalog/v1/oauth/tokens" in requested_urls
+    assert "http://polaris:8181/api/management/v1/oauth/tokens" not in requested_urls
 
 
 def test_list_namespaces_raises_polaris_client_error_on_http_error(monkeypatch):

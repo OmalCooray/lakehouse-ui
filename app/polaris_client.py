@@ -137,7 +137,11 @@ def get_table_schema(
 
 
 def get_principal_roles(
-    management_endpoint: str, client_id: str, client_secret: str, principal_name: str
+    catalog_endpoint: str,
+    management_endpoint: str,
+    client_id: str,
+    client_secret: str,
+    principal_name: str,
 ) -> list[str]:
     """Return the principal role names assigned to `principal_name`.
 
@@ -145,8 +149,16 @@ def get_principal_roles(
     *other* principals' roles (a regular principal is not authorized to
     list even its own — confirmed live) — in practice this is always
     called with the app's own root service credential, never a session's.
+
+    Polaris's OAuth token endpoint only exists under the Catalog API base
+    path (`{catalog_endpoint}/v1/oauth/tokens`) — the Management API base
+    path does NOT expose its own `/v1/oauth/tokens` (confirmed live: a
+    404). So the token is fetched from `catalog_endpoint`, then used as a
+    Bearer token against `management_endpoint`'s own paths, exactly like a
+    real client would use one OAuth server for two separate resource
+    APIs.
     """
-    token = _get_token(management_endpoint, client_id, client_secret)
+    token = _get_token(catalog_endpoint, client_id, client_secret)
     body = _get(
         management_endpoint, token, f"/v1/principals/{principal_name}/principal-roles"
     )

@@ -231,16 +231,25 @@ def catalog_table_schema(
 def me_route(session: Session = Depends(require_session)) -> dict:
     root_client_id = os.environ.get("POLARIS_ROOT_CLIENT_ID")
     root_client_secret = os.environ.get("POLARIS_ROOT_CLIENT_SECRET")
+    # get_principal_roles needs both: catalog_endpoint for the OAuth token
+    # exchange (Polaris's /v1/oauth/tokens only exists under the Catalog
+    # API base path, not the Management one — confirmed live), and
+    # management_endpoint for the actual principal-roles lookup.
+    catalog_endpoint = os.environ.get("POLARIS_ENDPOINT")
     management_endpoint = os.environ.get("POLARIS_MANAGEMENT_ENDPOINT")
-    if not root_client_id or not root_client_secret or not management_endpoint:
+    if not root_client_id or not root_client_secret or not catalog_endpoint or not management_endpoint:
         raise HTTPException(
             status_code=500,
             detail="server missing POLARIS_ROOT_CLIENT_ID/POLARIS_ROOT_CLIENT_SECRET/"
-            "POLARIS_MANAGEMENT_ENDPOINT configuration",
+            "POLARIS_ENDPOINT/POLARIS_MANAGEMENT_ENDPOINT configuration",
         )
     try:
         roles = get_principal_roles(
-            management_endpoint, root_client_id, root_client_secret, session.principal_name
+            catalog_endpoint,
+            management_endpoint,
+            root_client_id,
+            root_client_secret,
+            session.principal_name,
         )
     except PolarisClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
