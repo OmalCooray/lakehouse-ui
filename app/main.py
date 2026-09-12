@@ -80,6 +80,8 @@ def login_route(request: LoginRequest, response: Response) -> LoginResponse:
         raise HTTPException(
             status_code=500, detail="server missing POLARIS_ENDPOINT configuration"
         )
+    if not request.client_id or not request.client_secret:
+        raise HTTPException(status_code=400, detail="client_id and client_secret are required")
     try:
         principal_name = polaris_login(
             polaris_endpoint, request.client_id, request.client_secret
@@ -88,6 +90,9 @@ def login_route(request: LoginRequest, response: Response) -> LoginResponse:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     session_id = create_session(request.client_id, request.client_secret, principal_name)
+    # secure=True omitted: this app is only ever reached via
+    # kubectl port-forward over plain HTTP today (no TLS/Ingress anywhere
+    # in this stack) — a Secure cookie would silently break login.
     response.set_cookie(
         key="lakehouse_session",
         value=session_id,
@@ -106,8 +111,8 @@ def logout_route(
     return {"status": "ok"}
 
 
-@app.get("/")
-def index(lakehouse_session: str | None = Cookie(default=None)):
+@app.get("/", response_model=None)
+def index(lakehouse_session: str | None = Cookie(default=None)) -> FileResponse | RedirectResponse:
     if get_session(lakehouse_session) is None:
         return RedirectResponse(url="/login")
     return FileResponse(STATIC_DIR / "index.html")

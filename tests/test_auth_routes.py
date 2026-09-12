@@ -37,9 +37,12 @@ def test_login_failure_returns_401_and_sets_no_cookie(monkeypatch):
 
 
 def test_logout_clears_the_session(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
     monkeypatch.setattr(main_module, "polaris_login", lambda endpoint, cid, secret: "loader")
     login_response = client.post("/login", json={"client_id": "cid", "client_secret": "secret"})
+    assert login_response.status_code == 200
     cookie = login_response.cookies.get("lakehouse_session")
+    assert cookie is not None
 
     response = client.post("/logout", cookies={"lakehouse_session": cookie})
 
@@ -49,6 +52,13 @@ def test_logout_clears_the_session(monkeypatch):
 
 def test_query_requires_a_session():
     response = client.post("/query", json={"sql": "SELECT 1"})
+    assert response.status_code == 401
+
+
+def test_query_returns_401_with_a_garbage_cookie():
+    response = client.post(
+        "/query", json={"sql": "SELECT 1"}, cookies={"lakehouse_session": "not-a-real-session-id"}
+    )
     assert response.status_code == 401
 
 
