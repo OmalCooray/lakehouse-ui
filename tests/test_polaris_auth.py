@@ -70,3 +70,25 @@ def test_login_raises_when_token_has_no_sub_claim(monkeypatch):
 
     with pytest.raises(LoginError, match="sub"):
         login("http://polaris:8181/api/catalog", "cid", "secret")
+
+
+def test_login_raises_login_error_on_malformed_access_token(monkeypatch):
+    fake = _fake_response({"access_token": "not-a-valid-jwt"})
+    monkeypatch.setattr(
+        "app.polaris_auth.urllib.request.urlopen", lambda req, timeout=10: fake
+    )
+
+    with pytest.raises(LoginError, match="could not be decoded"):
+        login("http://polaris:8181/api/catalog", "cid", "secret")
+
+
+def test_login_does_not_blame_credentials_for_a_server_error(monkeypatch):
+    def raise_http_error(req, timeout=10):
+        raise urllib.error.HTTPError("url", 503, "service unavailable", {}, None)
+
+    monkeypatch.setattr("app.polaris_auth.urllib.request.urlopen", raise_http_error)
+
+    with pytest.raises(LoginError) as exc_info:
+        login("http://polaris:8181/api/catalog", "cid", "secret")
+
+    assert "invalid client_id or client_secret" not in str(exc_info.value)

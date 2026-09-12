@@ -52,7 +52,11 @@ def login(polaris_endpoint: str, client_id: str, client_secret: str) -> str:
         with urllib.request.urlopen(request, timeout=10) as response:
             body = json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        raise LoginError("invalid client_id or client_secret") from exc
+        if exc.code in (401, 403):
+            raise LoginError("invalid client_id or client_secret") from exc
+        raise LoginError(
+            f"Polaris returned an error ({exc.code}) — try again shortly"
+        ) from exc
     except urllib.error.URLError as exc:
         raise LoginError(f"could not reach Polaris: {exc}") from exc
 
@@ -60,7 +64,11 @@ def login(polaris_endpoint: str, client_id: str, client_secret: str) -> str:
     if not access_token:
         raise LoginError("Polaris did not return an access_token")
 
-    claims = _decode_jwt_payload(access_token)
+    try:
+        claims = _decode_jwt_payload(access_token)
+    except Exception as exc:
+        raise LoginError("Polaris returned a token that could not be decoded") from exc
+
     principal_name = claims.get("sub")
     if not principal_name:
         raise LoginError("token had no 'sub' claim")
