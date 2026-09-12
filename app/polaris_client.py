@@ -46,6 +46,12 @@ def _get_token(base_url: str, client_id: str, client_secret: str) -> str:
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             body = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise PolarisClientError("invalid client_id or client_secret") from exc
+        raise PolarisClientError(
+            f"Polaris returned an error ({exc.code}) authenticating"
+        ) from exc
     except urllib.error.URLError as exc:
         raise PolarisClientError(f"could not authenticate with Polaris: {exc}") from exc
     except json.JSONDecodeError as exc:
@@ -68,6 +74,8 @@ def _get(base_url: str, token: str, path: str) -> dict:
         with urllib.request.urlopen(request, timeout=10) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise PolarisClientError(f"not authorized for {path} ({exc.code})") from exc
         raise PolarisClientError(f"Polaris returned {exc.code} for {path}") from exc
     except urllib.error.URLError as exc:
         raise PolarisClientError(f"could not reach Polaris: {exc}") from exc
@@ -92,7 +100,10 @@ def list_tables(
     """Return table names in `catalog`.`namespace`."""
     token = _get_token(catalog_endpoint, client_id, client_secret)
     body = _get(catalog_endpoint, token, f"/v1/{catalog}/namespaces/{namespace}/tables")
-    return [identifier["name"] for identifier in body.get("identifiers", [])]
+    try:
+        return [identifier["name"] for identifier in body.get("identifiers", [])]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
 
 
 def get_table_schema(
@@ -116,10 +127,13 @@ def get_table_schema(
         (s for s in schemas if s.get("schema-id") == current_id),
         schemas[0] if schemas else {},
     )
-    return [
-        {"name": f["name"], "type": f["type"], "required": f["required"]}
-        for f in schema.get("fields", [])
-    ]
+    try:
+        return [
+            {"name": f["name"], "type": f["type"], "required": f["required"]}
+            for f in schema.get("fields", [])
+        ]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
 
 
 def get_principal_roles(
@@ -136,4 +150,7 @@ def get_principal_roles(
     body = _get(
         management_endpoint, token, f"/principals/{principal_name}/principal-roles"
     )
-    return [role["name"] for role in body.get("roles", [])]
+    try:
+        return [role["name"] for role in body.get("roles", [])]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc

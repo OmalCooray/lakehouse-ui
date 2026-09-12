@@ -187,3 +187,47 @@ def test_list_namespaces_raises_polaris_client_error_on_malformed_catalog_respon
 
     with pytest.raises(PolarisClientError, match="could not be parsed"):
         list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
+
+
+def test_list_namespaces_does_not_blame_credentials_for_a_server_error(monkeypatch):
+    def _urlopen(request, timeout=10):
+        if "oauth/tokens" in request.full_url:
+            return _response(TOKEN_RESPONSE)
+        raise urllib.error.HTTPError(request.full_url, 503, "service unavailable", {}, None)
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    with pytest.raises(PolarisClientError) as exc_info:
+        list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
+
+    assert "authorized" not in str(exc_info.value).lower()
+
+
+def test_get_token_does_not_blame_credentials_for_a_server_error(monkeypatch):
+    def _urlopen(request, timeout=10):
+        raise urllib.error.HTTPError(request.full_url, 500, "internal error", {}, None)
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    with pytest.raises(PolarisClientError) as exc_info:
+        list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
+
+    assert "invalid client_id or client_secret" not in str(exc_info.value)
+
+
+def test_list_tables_raises_polaris_client_error_on_unexpected_shape(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "namespaces/nyc_taxi/tables": {
+                    "identifiers": [{"namespace": ["nyc_taxi"]}],  # missing "name"
+                    "next-page-token": None,
+                },
+            }
+        ),
+    )
+
+    with pytest.raises(PolarisClientError, match="unexpected response shape"):
+        list_tables("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse", "nyc_taxi")
