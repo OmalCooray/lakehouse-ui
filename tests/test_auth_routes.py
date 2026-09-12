@@ -9,6 +9,7 @@ client = TestClient(app)
 
 
 def test_login_success_sets_cookie_and_returns_principal(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
     monkeypatch.setattr(main_module, "polaris_login", lambda endpoint, cid, secret: "loader")
 
     response = client.post("/login", json={"client_id": "cid", "client_secret": "secret"})
@@ -21,6 +22,8 @@ def test_login_success_sets_cookie_and_returns_principal(monkeypatch):
 
 
 def test_login_failure_returns_401_and_sets_no_cookie(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+
     def raise_login_error(endpoint, cid, secret):
         raise LoginError("invalid client_id or client_secret")
 
@@ -56,6 +59,7 @@ def test_index_redirects_to_login_when_not_authenticated():
 
 
 def test_index_serves_the_app_when_authenticated(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
     monkeypatch.setattr(main_module, "polaris_login", lambda endpoint, cid, secret: "loader")
     login_response = client.post("/login", json={"client_id": "cid", "client_secret": "secret"})
     cookie = login_response.cookies.get("lakehouse_session")
