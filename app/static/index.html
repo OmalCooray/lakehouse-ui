@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>lakehouse-ui</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ==" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css" integrity="sha512-gFMl3u9d0xt3WR8ZeW05MWm3yZ+ZfgsBVXLSOiFz2xeVrZ8Neg0+V1kkRIo9LikyA/T9HuS91kDfc2XWse0K0A==" crossorigin="anonymous">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <div id="sidebar-header">
         <button id="tab-catalog" class="sidebar-tab active" type="button">Catalog</button>
         <button id="tab-history" class="sidebar-tab" type="button">History</button>
-        <button id="refresh-catalog" type="button" title="Refresh catalog">⟳</button>
+        <button id="refresh-catalog" type="button" title="Refresh catalog" aria-label="Refresh catalog">⟳</button>
       </div>
       <div id="catalog-tree" class="sidebar-panel"></div>
       <div id="history-list" class="sidebar-panel" hidden></div>
@@ -38,8 +38,8 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" integrity="sha512-OeZ4Yrb/W7d2W4rAMOO0HQ9Ro/aWLtpW9BUSR2UOWnSV2hprXLkkYnnCGc9NeLUxxE4ZG7zN16UuT1Elqq8Opg==" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js" integrity="sha512-TZji/E4or1ciET62zt9IgnfFJPkMqV4EhZ8AfiRVZeq+yxCT5O+PomM7nkfttOwX/ckDwjPzevAUhKvXnHl7MA==" crossorigin="anonymous"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
