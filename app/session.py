@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 @dataclass
 class Session:
     client_id: str
-    client_secret: str
+    client_secret: str = field(repr=False)
     principal_name: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
