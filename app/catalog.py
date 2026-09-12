@@ -51,6 +51,11 @@ def build_connection(
     in-memory DuckDB connection — this is what makes the attach logic
     testable with a stub in place of real DuckDB/network calls.
     """
+    if not client_id:
+        raise CatalogConfigError("client_id must not be empty")
+    if not client_secret:
+        raise CatalogConfigError("client_secret must not be empty")
+
     env = {name: _require_env(name) for name in _REQUIRED_ENV_VARS}
     endpoint = env["POLARIS_ENDPOINT"]
     catalog = env["POLARIS_CATALOG"]

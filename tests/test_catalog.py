@@ -94,3 +94,21 @@ def test_build_connection_opens_in_memory_duckdb_when_no_conn_given(monkeypatch)
     assert result is fake
     assert calls == [":memory:"]
     assert "INSTALL iceberg" in "\n".join(fake.executed)
+
+
+def test_build_connection_rejects_empty_client_id(monkeypatch):
+    _set_env(monkeypatch)
+    with pytest.raises(CatalogConfigError, match="client_id"):
+        build_connection("", "s3cr3t", conn=FakeConnection())
+
+
+def test_build_connection_rejects_empty_client_secret(monkeypatch):
+    _set_env(monkeypatch)
+    with pytest.raises(CatalogConfigError, match="client_secret"):
+        build_connection("lakehouse-ui", "", conn=FakeConnection())
+
+
+def test_build_connection_rejects_none_client_id(monkeypatch):
+    _set_env(monkeypatch)
+    with pytest.raises(CatalogConfigError, match="client_id"):
+        build_connection(None, "s3cr3t", conn=FakeConnection())
