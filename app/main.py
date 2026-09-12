@@ -19,8 +19,6 @@ app = FastAPI(title="lakehouse-ui")
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-_READ_ONLY_PREFIXES = ("select", "with", "show", "describe", "explain", "pragma")
-
 
 class QueryRequest(BaseModel):
     sql: str
@@ -38,25 +36,6 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     principal: str
-
-
-def _is_read_only(sql: str) -> bool:
-    stripped = sql.strip()
-    if not stripped:
-        return False
-    first_word = stripped.split(None, 1)[0].lower()
-    return first_word in _READ_ONLY_PREFIXES
-
-
-def _is_single_statement(sql: str) -> bool:
-    # Heuristic: strip at most one trailing semicolon, then reject if any
-    # semicolon remains. This will also reject a query containing a literal
-    # ";" inside a quoted string literal, but a false positive is the safe
-    # direction for a security guard here.
-    body = sql.strip()
-    if body.endswith(";"):
-        body = body[:-1]
-    return ";" not in body
 
 
 def require_session(
@@ -129,20 +108,9 @@ def run_query(
 ) -> QueryResponse:
     if not request.sql.strip():
         raise HTTPException(status_code=400, detail="sql must not be empty")
-    if not _is_read_only(request.sql):
-        raise HTTPException(
-            status_code=400,
-            detail="only read-only statements are allowed "
-            f"({', '.join(_READ_ONLY_PREFIXES)})",
-        )
-    if not _is_single_statement(request.sql):
-        raise HTTPException(
-            status_code=400,
-            detail="only a single statement is allowed",
-        )
 
     try:
-        connection = build_connection()
+        connection = build_connection(session.client_id, session.client_secret)
     except CatalogConfigError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
