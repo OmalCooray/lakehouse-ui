@@ -12,6 +12,12 @@ from pydantic import BaseModel
 from app.catalog import CatalogConfigError, build_connection
 from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
+from app.polaris_client import (
+    PolarisClientError,
+    get_table_schema,
+    list_namespaces,
+    list_tables,
+)
 from app.session import Session, create_session, delete_session, get_session
 
 app = FastAPI(title="lakehouse-ui")
@@ -45,6 +51,17 @@ def require_session(
     if session is None:
         raise HTTPException(status_code=401, detail="not logged in")
     return session
+
+
+def _catalog_config() -> tuple[str, str]:
+    endpoint = os.environ.get("POLARIS_ENDPOINT")
+    catalog = os.environ.get("POLARIS_CATALOG")
+    if not endpoint or not catalog:
+        raise HTTPException(
+            status_code=500,
+            detail="server missing POLARIS_ENDPOINT/POLARIS_CATALOG configuration",
+        )
+    return endpoint, catalog
 
 
 @app.get("/healthz")
@@ -126,3 +143,41 @@ def run_query(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return QueryResponse(columns=columns, rows=rows)
+
+
+@app.get("/catalog/namespaces")
+def catalog_namespaces(session: Session = Depends(require_session)) -> dict:
+    endpoint, catalog = _catalog_config()
+    try:
+        namespaces = list_namespaces(endpoint, session.client_id, session.client_secret, catalog)
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"namespaces": namespaces}
+
+
+@app.get("/catalog/tables/{namespace}")
+def catalog_tables(
+    namespace: str, session: Session = Depends(require_session)
+) -> dict:
+    endpoint, catalog = _catalog_config()
+    try:
+        tables = list_tables(
+            endpoint, session.client_id, session.client_secret, catalog, namespace
+        )
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"tables": tables}
+
+
+@app.get("/catalog/tables/{namespace}/{table}/schema")
+def catalog_table_schema(
+    namespace: str, table: str, session: Session = Depends(require_session)
+) -> dict:
+    endpoint, catalog = _catalog_config()
+    try:
+        fields = get_table_schema(
+            endpoint, session.client_id, session.client_secret, catalog, namespace, table
+        )
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"fields": fields}
