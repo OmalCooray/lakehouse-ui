@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.catalog import CatalogConfigError, build_connection
+from app.history import get_history, record_query
 from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
 from app.polaris_client import (
@@ -136,13 +138,32 @@ def run_query(
             status_code=500, detail=f"failed to connect to catalog: {exc}"
         ) from exc
 
+    started_at = time.monotonic()
     try:
         result = connection.execute(request.sql)
         columns = [d[0] for d in result.description] if result.description else []
         rows = [list(row) for row in result.fetchall()]
     except Exception as exc:  # DuckDB/catalog errors surface as plain Exceptions
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        record_query(
+            principal=session.principal_name,
+            sql_text=request.sql,
+            status="error",
+            duration_ms=duration_ms,
+            row_count=None,
+            error_message=str(exc),
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    record_query(
+        principal=session.principal_name,
+        sql_text=request.sql,
+        status="success",
+        duration_ms=duration_ms,
+        row_count=len(rows),
+        error_message=None,
+    )
     return QueryResponse(columns=columns, rows=rows)
 
 
@@ -202,3 +223,11 @@ def me_route(session: Session = Depends(require_session)) -> dict:
     except PolarisClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"principal": session.principal_name, "roles": roles}
+
+
+@app.get("/history")
+def history_route(
+    limit: int = 50, offset: int = 0, session: Session = Depends(require_session)
+) -> dict:
+    history = get_history(session.principal_name, limit=limit, offset=offset)
+    return {"history": history}

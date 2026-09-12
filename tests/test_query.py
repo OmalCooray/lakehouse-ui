@@ -38,6 +38,7 @@ def test_query_runs_select_and_returns_rows(monkeypatch):
     monkeypatch.setattr(
         main_module, "build_connection", lambda client_id, client_secret: fake
     )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
 
     response = client.post(
         "/query", json={"sql": "SELECT * FROM nyc_taxi.trips"}, cookies=_logged_in_cookie()
@@ -58,6 +59,7 @@ def test_query_passes_the_session_principals_own_credentials(monkeypatch):
         return FakeConnection(["x"], [[1]])
 
     monkeypatch.setattr(main_module, "build_connection", fake_build_connection)
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
 
     client.post(
         "/query", json={"sql": "SELECT 1"}, cookies=_logged_in_cookie()
@@ -79,6 +81,7 @@ def test_query_allows_write_statements_now(monkeypatch):
     monkeypatch.setattr(
         main_module, "build_connection", lambda client_id, client_secret: fake
     )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
 
     response = client.post(
         "/query",
@@ -95,6 +98,7 @@ def test_query_allows_multi_statement_sql_now(monkeypatch):
     monkeypatch.setattr(
         main_module, "build_connection", lambda client_id, client_secret: fake
     )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
 
     response = client.post(
         "/query",
@@ -125,6 +129,7 @@ def test_query_returns_400_on_duckdb_error(monkeypatch):
     monkeypatch.setattr(
         main_module, "build_connection", lambda client_id, client_secret: RaisingConnection()
     )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
 
     response = client.post(
         "/query", json={"sql": "SELECT * FROM nyc_taxi.trips"}, cookies=_logged_in_cookie()
