@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.catalog import CatalogConfigError, build_connection
-from app.history import get_history, record_query
+from app.history import ensure_schema, get_history, record_query
 from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
 from app.polaris_client import (
@@ -24,6 +24,19 @@ from app.polaris_client import (
 from app.session import Session, create_session, delete_session, get_session
 
 app = FastAPI(title="lakehouse-ui")
+
+
+@app.on_event("startup")
+def _init_history_schema() -> None:
+    try:
+        ensure_schema()
+    except Exception as exc:  # noqa: BLE001 — don't crash the whole app if
+        # Postgres isn't reachable yet at startup; /history and query
+        # recording will just fail per-request until it is, same as any
+        # other downstream-dependency-not-ready case this app already
+        # tolerates (e.g. Polaris being briefly unreachable).
+        print(f"WARNING: could not initialize query_history schema at startup: {exc}")
+
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
