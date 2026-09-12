@@ -14,6 +14,7 @@ from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
 from app.polaris_client import (
     PolarisClientError,
+    get_principal_roles,
     get_table_schema,
     list_namespaces,
     list_tables,
@@ -181,3 +182,23 @@ def catalog_table_schema(
     except PolarisClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"fields": fields}
+
+
+@app.get("/me")
+def me_route(session: Session = Depends(require_session)) -> dict:
+    root_client_id = os.environ.get("POLARIS_ROOT_CLIENT_ID")
+    root_client_secret = os.environ.get("POLARIS_ROOT_CLIENT_SECRET")
+    management_endpoint = os.environ.get("POLARIS_MANAGEMENT_ENDPOINT")
+    if not root_client_id or not root_client_secret or not management_endpoint:
+        raise HTTPException(
+            status_code=500,
+            detail="server missing POLARIS_ROOT_CLIENT_ID/POLARIS_ROOT_CLIENT_SECRET/"
+            "POLARIS_MANAGEMENT_ENDPOINT configuration",
+        )
+    try:
+        roles = get_principal_roles(
+            management_endpoint, root_client_id, root_client_secret, session.principal_name
+        )
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"principal": session.principal_name, "roles": roles}
