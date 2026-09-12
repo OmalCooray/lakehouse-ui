@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -145,25 +145,34 @@ def run_query(
         rows = [list(row) for row in result.fetchall()]
     except Exception as exc:  # DuckDB/catalog errors surface as plain Exceptions
         duration_ms = int((time.monotonic() - started_at) * 1000)
-        record_query(
-            principal=session.principal_name,
-            sql_text=request.sql,
-            status="error",
-            duration_ms=duration_ms,
-            row_count=None,
-            error_message=str(exc),
-        )
+        try:
+            record_query(
+                principal=session.principal_name,
+                sql_text=request.sql,
+                status="error",
+                duration_ms=duration_ms,
+                row_count=None,
+                error_message=str(exc),
+            )
+        except Exception as history_exc:  # noqa: BLE001 — history logging must
+            # never affect the response the user gets, including hiding a real
+            # query error behind a history-store failure.
+            print(f"WARNING: failed to record query history: {history_exc}")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     duration_ms = int((time.monotonic() - started_at) * 1000)
-    record_query(
-        principal=session.principal_name,
-        sql_text=request.sql,
-        status="success",
-        duration_ms=duration_ms,
-        row_count=len(rows),
-        error_message=None,
-    )
+    try:
+        record_query(
+            principal=session.principal_name,
+            sql_text=request.sql,
+            status="success",
+            duration_ms=duration_ms,
+            row_count=len(rows),
+            error_message=None,
+        )
+    except Exception as history_exc:  # noqa: BLE001 — history logging must never
+        # affect the response the user gets.
+        print(f"WARNING: failed to record query history: {history_exc}")
     return QueryResponse(columns=columns, rows=rows)
 
 
@@ -227,7 +236,9 @@ def me_route(session: Session = Depends(require_session)) -> dict:
 
 @app.get("/history")
 def history_route(
-    limit: int = 50, offset: int = 0, session: Session = Depends(require_session)
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(require_session),
 ) -> dict:
     history = get_history(session.principal_name, limit=limit, offset=offset)
     return {"history": history}

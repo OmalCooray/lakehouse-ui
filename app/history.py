@@ -58,27 +58,30 @@ def ensure_schema(conn: ExecutableConnection | None = None) -> None:
     owns_conn = conn is None
     if conn is None:
         conn = _connect()
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS query_history (
-            id            BIGSERIAL PRIMARY KEY,
-            principal     TEXT NOT NULL,
-            sql_text      TEXT NOT NULL,
-            status        TEXT NOT NULL,
-            row_count     INTEGER,
-            error_message TEXT,
-            duration_ms   INTEGER NOT NULL,
-            run_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS query_history (
+                id            BIGSERIAL PRIMARY KEY,
+                principal     TEXT NOT NULL,
+                sql_text      TEXT NOT NULL,
+                status        TEXT NOT NULL,
+                row_count     INTEGER,
+                error_message TEXT,
+                duration_ms   INTEGER NOT NULL,
+                run_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS query_history_principal_run_at "
-        "ON query_history (principal, run_at DESC)"
-    )
-    if owns_conn:
-        conn.commit()
-        conn.close()
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS query_history_principal_run_at "
+            "ON query_history (principal, run_at DESC)"
+        )
+        if owns_conn:
+            conn.commit()
+    finally:
+        if owns_conn:
+            conn.close()
 
 
 def record_query(
@@ -97,17 +100,20 @@ def record_query(
     owns_conn = conn is None
     if conn is None:
         conn = _connect()
-    conn.execute(
-        """
-        INSERT INTO query_history
-            (principal, sql_text, status, row_count, error_message, duration_ms)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        (principal, sql_text, status, row_count, error_message, duration_ms),
-    )
-    if owns_conn:
-        conn.commit()
-        conn.close()
+    try:
+        conn.execute(
+            """
+            INSERT INTO query_history
+                (principal, sql_text, status, row_count, error_message, duration_ms)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (principal, sql_text, status, row_count, error_message, duration_ms),
+        )
+        if owns_conn:
+            conn.commit()
+    finally:
+        if owns_conn:
+            conn.close()
 
 
 def get_history(
@@ -116,31 +122,33 @@ def get_history(
     owns_conn = conn is None
     if conn is None:
         conn = _connect()
-    cursor = conn.execute(
-        """
-        SELECT id, sql_text, status, row_count, error_message, duration_ms, run_at
-        FROM query_history
-        WHERE principal = %s
-        ORDER BY run_at DESC
-        LIMIT %s OFFSET %s
-        """,
-        (principal, limit, offset),
-    )
-    rows = cursor.fetchall()
-    # NOTE: row[0]..row[6] below is positional and must stay in sync with
-    # this SELECT's column order.
-    result = [
-        {
-            "id": row[0],
-            "sql_text": row[1],
-            "status": row[2],
-            "row_count": row[3],
-            "error_message": row[4],
-            "duration_ms": row[5],
-            "run_at": row[6].isoformat(),
-        }
-        for row in rows
-    ]
-    if owns_conn:
-        conn.close()
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, sql_text, status, row_count, error_message, duration_ms, run_at
+            FROM query_history
+            WHERE principal = %s
+            ORDER BY run_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            (principal, limit, offset),
+        )
+        rows = cursor.fetchall()
+        # NOTE: row[0]..row[6] below is positional and must stay in sync with
+        # this SELECT's column order.
+        result = [
+            {
+                "id": row[0],
+                "sql_text": row[1],
+                "status": row[2],
+                "row_count": row[3],
+                "error_message": row[4],
+                "duration_ms": row[5],
+                "run_at": row[6].isoformat(),
+            }
+            for row in rows
+        ]
+    finally:
+        if owns_conn:
+            conn.close()
     return result

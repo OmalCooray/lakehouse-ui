@@ -142,3 +142,39 @@ def test_query_returns_400_on_duckdb_error(monkeypatch):
 def test_query_returns_401_without_a_session():
     response = client.post("/query", json={"sql": "SELECT 1"})
     assert response.status_code == 401
+
+
+def test_query_still_succeeds_even_if_recording_history_fails(monkeypatch):
+    fake = FakeConnection(["x"], [[1]])
+    monkeypatch.setattr(main_module, "build_connection", lambda client_id, client_secret: fake)
+
+    def raise_on_record(**kwargs):
+        raise RuntimeError("history db unreachable")
+
+    monkeypatch.setattr(main_module, "record_query", raise_on_record)
+
+    response = client.post("/query", json={"sql": "SELECT 1"}, cookies=_logged_in_cookie())
+
+    assert response.status_code == 200
+
+
+def test_query_error_is_not_masked_if_recording_history_also_fails(monkeypatch):
+    class RaisingConnection:
+        def execute(self, sql):
+            raise ValueError("Catalog Error: Table with name trips does not exist!")
+
+    monkeypatch.setattr(
+        main_module, "build_connection", lambda client_id, client_secret: RaisingConnection()
+    )
+
+    def raise_on_record(**kwargs):
+        raise RuntimeError("history db unreachable")
+
+    monkeypatch.setattr(main_module, "record_query", raise_on_record)
+
+    response = client.post(
+        "/query", json={"sql": "SELECT * FROM nyc_taxi.trips"}, cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 400
+    assert "does not exist" in response.json()["detail"]
