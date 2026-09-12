@@ -90,6 +90,10 @@ def record_query(
     error_message: str | None = None,
     conn: ExecutableConnection | None = None,
 ) -> None:
+    """Insert one query_history row. If `conn` is not given, opens/commits/
+    closes its own connection; if `conn` IS given, never commits/closes it —
+    that's the caller's responsibility.
+    """
     owns_conn = conn is None
     if conn is None:
         conn = _connect()
@@ -123,6 +127,8 @@ def get_history(
         (principal, limit, offset),
     )
     rows = cursor.fetchall()
+    # NOTE: row[0]..row[6] below is positional and must stay in sync with
+    # this SELECT's column order.
     result = [
         {
             "id": row[0],

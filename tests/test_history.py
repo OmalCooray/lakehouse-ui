@@ -130,3 +130,34 @@ def test_get_history_requires_env_vars_when_no_conn_given(monkeypatch):
     _set_env(monkeypatch, LAKEHOUSE_UI_DB_HOST=None)
     with pytest.raises(HistoryConfigError, match="LAKEHOUSE_UI_DB_HOST"):
         get_history("loader")
+
+
+def test_ensure_schema_commits_and_closes_when_it_owns_the_connection(monkeypatch):
+    fake = FakeConnection()
+    monkeypatch.setattr("app.history._connect", lambda: fake)
+
+    ensure_schema()
+
+    assert fake.committed is True
+    assert fake.closed is True
+
+
+def test_record_query_commits_and_closes_when_it_owns_the_connection(monkeypatch):
+    fake = FakeConnection()
+    monkeypatch.setattr("app.history._connect", lambda: fake)
+
+    record_query(
+        principal="loader", sql_text="SELECT 1", status="success", duration_ms=1, conn=None
+    )
+
+    assert fake.committed is True
+    assert fake.closed is True
+
+
+def test_get_history_closes_when_it_owns_the_connection(monkeypatch):
+    fake = FakeConnection(fetch_rows=[])
+    monkeypatch.setattr("app.history._connect", lambda: fake)
+
+    get_history("loader")
+
+    assert fake.closed is True
