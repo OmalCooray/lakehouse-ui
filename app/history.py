@@ -45,6 +45,7 @@ def _connect() -> ExecutableConnection:
         dbname=env["LAKEHOUSE_UI_DB_NAME"],
         user=env["LAKEHOUSE_UI_DB_USER"],
         password=env["LAKEHOUSE_UI_DB_PASSWORD"],
+        connect_timeout=5,
     )
 
 
