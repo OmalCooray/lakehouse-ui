@@ -65,6 +65,56 @@ def test_tables_returns_list(monkeypatch):
     assert response.json() == {"tables": ["trips", "fct_trips"]}
 
 
+def test_tables_uses_the_sessions_own_credentials_and_correct_namespace(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+    captured = {}
+
+    def fake_list_tables(endpoint, client_id, client_secret, catalog, namespace):
+        captured["client_id"] = client_id
+        captured["client_secret"] = client_secret
+        captured["catalog"] = catalog
+        captured["namespace"] = namespace
+        return []
+
+    monkeypatch.setattr(main_module, "list_tables", fake_list_tables)
+
+    client.get("/catalog/tables/nyc_taxi", cookies=_logged_in_cookie())
+
+    assert captured == {
+        "client_id": "cid",
+        "client_secret": "secret",
+        "catalog": "lakehouse",
+        "namespace": "nyc_taxi",
+    }
+
+
+def test_table_schema_uses_the_sessions_own_credentials_and_correct_args(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+    captured = {}
+
+    def fake_get_table_schema(endpoint, client_id, client_secret, catalog, namespace, table):
+        captured["client_id"] = client_id
+        captured["client_secret"] = client_secret
+        captured["catalog"] = catalog
+        captured["namespace"] = namespace
+        captured["table"] = table
+        return []
+
+    monkeypatch.setattr(main_module, "get_table_schema", fake_get_table_schema)
+
+    client.get("/catalog/tables/nyc_taxi/trips/schema", cookies=_logged_in_cookie())
+
+    assert captured == {
+        "client_id": "cid",
+        "client_secret": "secret",
+        "catalog": "lakehouse",
+        "namespace": "nyc_taxi",
+        "table": "trips",
+    }
+
+
 def test_table_schema_returns_fields(monkeypatch):
     monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
     monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
