@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>lakehouse-ui — log in</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #0f1419;
+      color: #e8edf2;
+    }
+    form { background: #1b222b; padding: 2rem; border-radius: 8px; width: 320px; }
+    h1 { font-size: 1.1rem; margin: 0 0 1.2rem; }
+    label { display: block; font-size: 0.85rem; margin-bottom: 0.3rem; color: #8a95a1; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      background: #141a21;
+      border: 1px solid #2a333d;
+      border-radius: 4px;
+      color: #e8edf2;
+    }
+    button {
+      width: 100%;
+      padding: 0.6rem;
+      background: #2b8a6b;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.6; cursor: default; }
+    #error { color: #e05252; font-size: 0.85rem; margin-top: 0.8rem; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <form id="login-form">
+    <h1>lakehouse-ui</h1>
+    <label for="client_id">Client ID</label>
+    <input id="client_id" name="client_id" autocomplete="username" required>
+    <label for="client_secret">Client Secret</label>
+    <input id="client_secret" name="client_secret" type="password" autocomplete="current-password" required>
+    <button type="submit" id="submit-btn">Log in</button>
+    <div id="error"></div>
+  </form>
+  <script>
+    const form = document.getElementById('login-form');
+    const errorBox = document.getElementById('error');
+    const submitButton = document.getElementById('submit-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.textContent = '';
+      submitButton.disabled = true;
+      try {
+        const client_id = document.getElementById('client_id').value;
+        const client_secret = document.getElementById('client_secret').value;
+
+        let response, body;
+        try {
+          response = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id, client_secret })
+          });
+          body = await response.json();
+        } catch (err) {
+          errorBox.textContent = 'Request failed: ' + err;
+          return;
+        }
+
+        if (!response.ok) {
+          errorBox.textContent = body.detail || 'Login failed';
+          return;
+        }
+        window.location.href = '/';
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
