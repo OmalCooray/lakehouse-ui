@@ -6,6 +6,38 @@ let worksheets = [];
 let activeWorksheetId = null;
 let nextWorksheetNumber = 1;
 let editor = null;
+let queryInFlight = false;
+
+// Shared fetch wrapper: redirects to /login on 401, throws a descriptive
+// Error on any other non-2xx or malformed response, otherwise returns the
+// parsed JSON body. Every loader below should go through this instead of
+// hand-rolling its own fetch/response.ok/json() handling — that
+// inconsistency (some loaders checked response.ok, some didn't, one had
+// no try/catch at all) is exactly what let real bugs through review.
+async function apiFetch(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (err) {
+    throw new Error('Request failed: ' + err);
+  }
+  if (response.status === 401) {
+    window.location.href = '/login';
+    // Throw anyway so callers' code after this line never executes with
+    // no valid body — the redirect above is already in flight.
+    throw new Error('not authenticated');
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch (err) {
+    throw new Error('Server returned an invalid response');
+  }
+  if (!response.ok) {
+    throw new Error(body.detail || 'Request failed');
+  }
+  return body;
+}
 
 function newWorksheet(sql = '') {
   const id = 'ws-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
@@ -119,11 +151,20 @@ function renderResults(worksheet) {
 }
 
 async function runActiveWorksheet() {
+  if (queryInFlight) return;
+  queryInFlight = true;
+
   const worksheet = worksheets.find((w) => w.id === activeWorksheetId);
-  if (!worksheet) return;
+  if (!worksheet) {
+    queryInFlight = false;
+    return;
+  }
   worksheet.sql = editor.getValue();
   const sql = worksheet.sql.trim();
-  if (!sql) return;
+  if (!sql) {
+    queryInFlight = false;
+    return;
+  }
 
   const statusEl = document.getElementById('query-status');
   const runButton = document.getElementById('run-btn');
@@ -131,39 +172,31 @@ async function runActiveWorksheet() {
   runButton.disabled = true;
 
   try {
-    let response, body;
+    let body;
     try {
-      response = await fetch('/query', {
+      body = await apiFetch('/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql }),
       });
-      body = await response.json();
-    } catch (err) {
-      worksheet.error = 'Request failed: ' + err;
-      worksheet.columns = [];
-      worksheet.rows = [];
-      renderResults(worksheet);
-      return;
-    }
-
-    if (response.status === 401) {
-      window.location.href = '/login';
-      return;
-    }
-
-    if (!response.ok) {
-      worksheet.error = body.detail || 'Query failed';
-      worksheet.columns = [];
-      worksheet.rows = [];
-    } else {
       worksheet.error = null;
       worksheet.columns = body.columns;
       worksheet.rows = body.rows;
+    } catch (err) {
+      if (err.message === 'not authenticated') {
+        // Redirect to /login is already in flight; don't flash an error.
+        return;
+      }
+      worksheet.error = err.message;
+      worksheet.columns = [];
+      worksheet.rows = [];
     }
+
+    if (worksheet.id !== activeWorksheetId) return;
     renderResults(worksheet);
     loadHistory();
   } finally {
+    queryInFlight = false;
     statusEl.textContent = '';
     runButton.disabled = false;
   }
@@ -176,14 +209,11 @@ async function loadCatalog() {
   tree.textContent = 'Loading...';
   let namespaces;
   try {
-    const response = await fetch('/catalog/namespaces');
-    if (response.status === 401) {
-      window.location.href = '/login';
-      return;
-    }
-    namespaces = (await response.json()).namespaces;
+    const body = await apiFetch('/catalog/namespaces');
+    namespaces = body.namespaces;
   } catch (err) {
-    tree.textContent = 'Failed to load catalog: ' + err;
+    if (err.message === 'not authenticated') return;
+    tree.textContent = 'Failed to load catalog: ' + err.message;
     return;
   }
 
@@ -203,19 +233,24 @@ async function loadCatalog() {
       nsEl.textContent = (tablesEl.hidden ? '▸ ' : '▾ ') + ns;
       if (!loaded) {
         loaded = true;
-        const response = await fetch('/catalog/tables/' + encodeURIComponent(ns));
-        const body = await response.json();
-        body.tables.forEach((t) => {
-          const tEl = document.createElement('div');
-          tEl.className = 'tree-table';
-          tEl.textContent = t;
-          tEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            editor.replaceSelection('lakehouse.' + ns + '.' + t);
-            editor.focus();
+        try {
+          const tablesBody = await apiFetch('/catalog/tables/' + encodeURIComponent(ns));
+          tablesBody.tables.forEach((t) => {
+            const tEl = document.createElement('div');
+            tEl.className = 'tree-table';
+            tEl.textContent = t;
+            tEl.addEventListener('click', (e) => {
+              e.stopPropagation();
+              editor.replaceSelection('lakehouse.' + ns + '.' + t);
+              editor.focus();
+            });
+            tablesEl.appendChild(tEl);
           });
-          tablesEl.appendChild(tEl);
-        });
+        } catch (err) {
+          loaded = false;
+          if (err.message === 'not authenticated') return;
+          tablesEl.textContent = 'Failed to load tables: ' + err.message;
+        }
       }
     });
 
@@ -230,14 +265,11 @@ async function loadHistory() {
   const list = document.getElementById('history-list');
   let history;
   try {
-    const response = await fetch('/history');
-    if (response.status === 401) {
-      window.location.href = '/login';
-      return;
-    }
-    history = (await response.json()).history;
+    const body = await apiFetch('/history');
+    history = body.history;
   } catch (err) {
-    list.textContent = 'Failed to load history: ' + err;
+    if (err.message === 'not authenticated') return;
+    list.textContent = 'Failed to load history: ' + err.message;
     return;
   }
 
@@ -269,13 +301,13 @@ function showSidebarPanel(panel) {
 // --- Whoami / logout --------------------------------------------------
 
 async function loadWhoami() {
-  const response = await fetch('/me');
-  if (response.status === 401) {
-    window.location.href = '/login';
-    return;
+  try {
+    const body = await apiFetch('/me');
+    document.getElementById('whoami-text').textContent = body.principal + ' · ' + body.roles.join(', ');
+  } catch (err) {
+    if (err.message === 'not authenticated') return;
+    document.getElementById('whoami-text').textContent = '(failed to load)';
   }
-  const body = await response.json();
-  document.getElementById('whoami-text').textContent = body.principal + ' · ' + body.roles.join(', ');
 }
 
 async function logout() {
