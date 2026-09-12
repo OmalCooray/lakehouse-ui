@@ -17,8 +17,6 @@ class FakeConnection:
 
 REQUIRED_ENV = {
     "POLARIS_ENDPOINT": "http://polaris.lakehouse.svc.cluster.local:8181/api/catalog",
-    "POLARIS_CLIENT_ID": "lakehouse-ui",
-    "POLARIS_CLIENT_SECRET": "s3cr3t",
     "POLARIS_CATALOG": "lakehouse",
 }
 
@@ -35,32 +33,20 @@ def _set_env(monkeypatch, **overrides):
 def test_build_connection_requires_polaris_endpoint(monkeypatch):
     _set_env(monkeypatch, POLARIS_ENDPOINT=None)
     with pytest.raises(CatalogConfigError, match="POLARIS_ENDPOINT"):
-        build_connection(FakeConnection())
-
-
-def test_build_connection_requires_client_id(monkeypatch):
-    _set_env(monkeypatch, POLARIS_CLIENT_ID=None)
-    with pytest.raises(CatalogConfigError, match="POLARIS_CLIENT_ID"):
-        build_connection(FakeConnection())
-
-
-def test_build_connection_requires_client_secret(monkeypatch):
-    _set_env(monkeypatch, POLARIS_CLIENT_SECRET=None)
-    with pytest.raises(CatalogConfigError, match="POLARIS_CLIENT_SECRET"):
-        build_connection(FakeConnection())
+        build_connection("lakehouse-ui", "s3cr3t", conn=FakeConnection())
 
 
 def test_build_connection_requires_catalog(monkeypatch):
     _set_env(monkeypatch, POLARIS_CATALOG=None)
     with pytest.raises(CatalogConfigError, match="POLARIS_CATALOG"):
-        build_connection(FakeConnection())
+        build_connection("lakehouse-ui", "s3cr3t", conn=FakeConnection())
 
 
 def test_build_connection_installs_extensions_and_attaches(monkeypatch):
     _set_env(monkeypatch)
     fake = FakeConnection()
 
-    result = build_connection(fake)
+    result = build_connection("lakehouse-ui", "s3cr3t", conn=fake)
 
     assert result is fake
     assert fake.executed == [
@@ -83,10 +69,10 @@ def test_build_connection_installs_extensions_and_attaches(monkeypatch):
 
 
 def test_build_connection_escapes_single_quotes_in_secret(monkeypatch):
-    _set_env(monkeypatch, POLARIS_CLIENT_SECRET="o'brien")
+    _set_env(monkeypatch)
     fake = FakeConnection()
 
-    build_connection(fake)
+    build_connection("lakehouse-ui", "o'brien", conn=fake)
 
     assert "CLIENT_SECRET 'o''brien'" in "\n".join(fake.executed)
 
@@ -103,7 +89,7 @@ def test_build_connection_opens_in_memory_duckdb_when_no_conn_given(monkeypatch)
     fake_duckdb_module = types.SimpleNamespace(connect=fake_connect)
     monkeypatch.setitem(sys.modules, "duckdb", fake_duckdb_module)
 
-    result = build_connection()
+    result = build_connection("lakehouse-ui", "s3cr3t")
 
     assert result is fake
     assert calls == [":memory:"]

@@ -1,12 +1,8 @@
 """Build a DuckDB connection attached to the Polaris Iceberg REST catalog.
 
-Configuration is entirely via environment variables so the same code runs
-locally (port-forwarded) and in-cluster (values mounted from a Secret):
-
-  POLARIS_ENDPOINT       e.g. http://polaris.lakehouse.svc.cluster.local:8181/api/catalog
-  POLARIS_CLIENT_ID      the scoped principal's client id
-  POLARIS_CLIENT_SECRET  the scoped principal's client secret
-  POLARIS_CATALOG        e.g. lakehouse
+POLARIS_ENDPOINT/POLARIS_CATALOG are fixed env vars (not per-user); the
+principal's own client_id/client_secret are passed in by the caller (from
+the logged-in session — see app.session), not read from the environment.
 """
 from __future__ import annotations
 
@@ -24,8 +20,6 @@ class ExecutableConnection(Protocol):
 
 _REQUIRED_ENV_VARS = (
     "POLARIS_ENDPOINT",
-    "POLARIS_CLIENT_ID",
-    "POLARIS_CLIENT_SECRET",
     "POLARIS_CATALOG",
 )
 
@@ -47,8 +41,11 @@ def _sql_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
-def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConnection:
-    """Return a DuckDB connection with the Polaris catalog attached.
+def build_connection(
+    client_id: str, client_secret: str, conn: ExecutableConnection | None = None
+) -> ExecutableConnection:
+    """Return a DuckDB connection with the Polaris catalog attached, using
+    the given principal's credentials.
 
     Pass an existing `conn` to attach onto it instead of opening a fresh
     in-memory DuckDB connection — this is what makes the attach logic
@@ -56,8 +53,6 @@ def build_connection(conn: ExecutableConnection | None = None) -> ExecutableConn
     """
     env = {name: _require_env(name) for name in _REQUIRED_ENV_VARS}
     endpoint = env["POLARIS_ENDPOINT"]
-    client_id = env["POLARIS_CLIENT_ID"]
-    client_secret = env["POLARIS_CLIENT_SECRET"]
     catalog = env["POLARIS_CATALOG"]
 
     if conn is None:
