@@ -153,3 +153,37 @@ def test_list_namespaces_raises_on_unreachable_polaris(monkeypatch):
 
     with pytest.raises(PolarisClientError, match="could not"):
         list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
+
+
+def _malformed_json_response():
+    resp = MagicMock()
+    resp.read.return_value = b"not json"
+    resp.__enter__.return_value = resp
+    return resp
+
+
+def test_list_namespaces_raises_polaris_client_error_on_malformed_token_response(
+    monkeypatch,
+):
+    def _urlopen(request, timeout=10):
+        assert "oauth/tokens" in request.full_url
+        return _malformed_json_response()
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    with pytest.raises(PolarisClientError, match="could not be parsed"):
+        list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
+
+
+def test_list_namespaces_raises_polaris_client_error_on_malformed_catalog_response(
+    monkeypatch,
+):
+    def _urlopen(request, timeout=10):
+        if "oauth/tokens" in request.full_url:
+            return _response(TOKEN_RESPONSE)
+        return _malformed_json_response()
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    with pytest.raises(PolarisClientError, match="could not be parsed"):
+        list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")

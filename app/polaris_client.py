@@ -48,6 +48,10 @@ def _get_token(base_url: str, client_id: str, client_secret: str) -> str:
             body = json.loads(response.read())
     except urllib.error.URLError as exc:
         raise PolarisClientError(f"could not authenticate with Polaris: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise PolarisClientError(
+            "Polaris returned a response that could not be parsed as JSON"
+        ) from exc
     token = body.get("access_token")
     if not token:
         raise PolarisClientError("Polaris did not return an access_token")
@@ -67,6 +71,10 @@ def _get(base_url: str, token: str, path: str) -> dict:
         raise PolarisClientError(f"Polaris returned {exc.code} for {path}") from exc
     except urllib.error.URLError as exc:
         raise PolarisClientError(f"could not reach Polaris: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise PolarisClientError(
+            f"Polaris returned a response that could not be parsed as JSON for {path}"
+        ) from exc
 
 
 def list_namespaces(
