@@ -119,7 +119,7 @@ def test_get_principal_roles_returns_role_names(monkeypatch):
         _fake_urlopen(
             {
                 "oauth/tokens": TOKEN_RESPONSE,
-                "principals/loader/principal-roles": {
+                "v1/principals/loader/principal-roles": {
                     "roles": [{"name": "loader_role", "federated": False}]
                 },
             }
@@ -131,6 +131,32 @@ def test_get_principal_roles_returns_role_names(monkeypatch):
     )
 
     assert result == ["loader_role"]
+
+
+def test_get_principal_roles_uses_the_v1_management_api_path(monkeypatch):
+    # Regression test: an earlier version of this function built
+    # f"/principals/{name}/principal-roles" (missing the /v1 prefix every
+    # other Management/Catalog API path in this module has). Polaris 1.7.0
+    # returns a 404 for that path — confirmed live against the real
+    # cluster, not assumed. `_fake_urlopen`'s substring matching means the
+    # test above would pass even without the prefix, so this test asserts
+    # the exact requested URL to pin the correct path going forward.
+    requested_urls = []
+
+    def _urlopen(request, timeout=10):
+        requested_urls.append(request.full_url)
+        if "oauth/tokens" in request.full_url:
+            return _response(TOKEN_RESPONSE)
+        return _response({"roles": []})
+
+    monkeypatch.setattr("app.polaris_client.urllib.request.urlopen", _urlopen)
+
+    get_principal_roles("http://polaris:8181/api/management", "root", "rootsecret", "loader")
+
+    assert (
+        "http://polaris:8181/api/management/v1/principals/loader/principal-roles"
+        in requested_urls
+    )
 
 
 def test_list_namespaces_raises_polaris_client_error_on_http_error(monkeypatch):

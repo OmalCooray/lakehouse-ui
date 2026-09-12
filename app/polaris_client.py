@@ -148,7 +148,7 @@ def get_principal_roles(
     """
     token = _get_token(management_endpoint, client_id, client_secret)
     body = _get(
-        management_endpoint, token, f"/principals/{principal_name}/principal-roles"
+        management_endpoint, token, f"/v1/principals/{principal_name}/principal-roles"
     )
     try:
         return [role["name"] for role in body.get("roles", [])]
