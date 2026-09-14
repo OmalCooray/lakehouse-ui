@@ -177,8 +177,13 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #0f1419; color
   transform: translateY(0);
 }
 .tree-namespace-row, .tree-table-row { display: flex; align-items: center; justify-content: space-between; }
-.tree-row-actions { display: flex; gap: 0.4rem; opacity: 0; }
-.tree-namespace-row:hover .tree-row-actions, .tree-table-row:hover .tree-row-actions { opacity: 1; }
+.tree-row-actions { display: flex; gap: 0.4rem; opacity: 0.4; }
+.tree-namespace-row:hover .tree-row-actions,
+.tree-namespace-row:focus-within .tree-row-actions,
+.tree-table-row:hover .tree-row-actions,
+.tree-table-row:focus-within .tree-row-actions {
+  opacity: 1;
+}
 .tree-row-actions button { background: none; border: none; color: #8a95a1; cursor: pointer; font-size: 0.8rem; padding: 0 0.2rem; }
 .tree-row-actions button:hover { color: #e8edf2; }
 .new-table-column-row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.3rem; }
