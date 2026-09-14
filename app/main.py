@@ -17,11 +17,14 @@ from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
 from app.polaris_client import (
     PolarisClientError,
+    get_catalog_roles_for_principal_role,
+    get_grants_for_catalog_role,
     get_namespace_details,
     get_principal_roles,
     get_table_details,
     get_table_schema,
     list_namespaces,
+    list_principals,
     list_tables,
 )
 from app.session_store import (
@@ -356,6 +359,58 @@ def me_route(session: Session = Depends(require_session)) -> dict:
     except PolarisClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"principal": session.principal_name, "roles": roles}
+
+
+@app.get("/access")
+def access_route(session: Session = Depends(require_session)) -> dict:
+    root_client_id = os.environ.get("POLARIS_ROOT_CLIENT_ID")
+    root_client_secret = os.environ.get("POLARIS_ROOT_CLIENT_SECRET")
+    catalog_endpoint = os.environ.get("POLARIS_ENDPOINT")
+    management_endpoint = os.environ.get("POLARIS_MANAGEMENT_ENDPOINT")
+    _, catalog = _catalog_config()
+    if not root_client_id or not root_client_secret or not catalog_endpoint or not management_endpoint:
+        raise HTTPException(
+            status_code=500,
+            detail="server missing POLARIS_ROOT_CLIENT_ID/POLARIS_ROOT_CLIENT_SECRET/"
+            "POLARIS_ENDPOINT/POLARIS_MANAGEMENT_ENDPOINT configuration",
+        )
+    try:
+        principal_names = list_principals(
+            catalog_endpoint, management_endpoint, root_client_id, root_client_secret
+        )
+        principals = []
+        for name in principal_names:
+            principal_roles = get_principal_roles(
+                catalog_endpoint, management_endpoint, root_client_id, root_client_secret, name
+            )
+            role_entries = []
+            for principal_role in principal_roles:
+                catalog_roles = get_catalog_roles_for_principal_role(
+                    catalog_endpoint,
+                    management_endpoint,
+                    root_client_id,
+                    root_client_secret,
+                    catalog,
+                    principal_role,
+                )
+                catalog_role_entries = []
+                for catalog_role in catalog_roles:
+                    grants = get_grants_for_catalog_role(
+                        catalog_endpoint,
+                        management_endpoint,
+                        root_client_id,
+                        root_client_secret,
+                        catalog,
+                        catalog_role,
+                    )
+                    catalog_role_entries.append({"name": catalog_role, "grants": grants})
+                role_entries.append(
+                    {"name": principal_role, "catalog_roles": catalog_role_entries}
+                )
+            principals.append({"name": name, "principal_roles": role_entries})
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"principals": principals}
 
 
 @app.get("/history")
