@@ -52,12 +52,28 @@ def test_query_runs_select_and_returns_rows(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body == {
-        "columns": ["id", "name"],
-        "rows": [[1, "a"], [2, "b"]],
-        "truncated": False,
-    }
+    assert body["columns"] == ["id", "name"]
+    assert body["rows"] == [[1, "a"], [2, "b"]]
+    assert body["truncated"] is False
     assert fake.executed == ["SELECT * FROM nyc_taxi.trips"]
+
+
+def test_query_response_includes_duration_and_row_count(monkeypatch):
+    fake = FakeConnection(["id"], [[1], [2], [3]])
+    monkeypatch.setattr(
+        main_module, "build_connection", lambda client_id, client_secret: fake
+    )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
+
+    response = client.post(
+        "/query", json={"sql": "SELECT * FROM t"}, cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body["duration_ms"], int)
+    assert body["duration_ms"] >= 0
+    assert body["row_count"] == 3
 
 
 def test_query_caps_rows_and_reports_truncation(monkeypatch):

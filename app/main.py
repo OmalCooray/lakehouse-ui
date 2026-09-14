@@ -107,6 +107,8 @@ class QueryResponse(BaseModel):
     columns: list[str]
     rows: list[list]
     truncated: bool = False
+    duration_ms: int
+    row_count: int
 
 
 class LoginRequest(BaseModel):
@@ -259,7 +261,13 @@ def _run_query_body(request: QueryRequest, session: Session) -> QueryResponse:
     except Exception as history_exc:  # noqa: BLE001 — history logging must never
         # affect the response the user gets.
         print(f"WARNING: failed to record query history: {history_exc}")
-    return QueryResponse(columns=columns, rows=rows, truncated=truncated)
+    return QueryResponse(
+        columns=columns,
+        rows=rows,
+        truncated=truncated,
+        duration_ms=duration_ms,
+        row_count=len(rows),
+    )
 
 
 @app.get("/catalog/namespaces")
