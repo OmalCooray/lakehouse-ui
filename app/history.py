@@ -1,52 +1,15 @@
 """Query history, stored in Postgres — a dedicated `lakehouse_ui` database
 on the existing polaris-postgres instance (see charts/polaris-postgres).
 
-Connection info comes from environment variables (LAKEHOUSE_UI_DB_HOST/
-_NAME/_USER/_PASSWORD), the same explicit-env-var pattern app.catalog uses
-for POLARIS_* — no ORM.
+Connection handling lives in app.db (shared with app.session_store).
 """
 from __future__ import annotations
 
-import os
-from typing import Any, Protocol
+from app.db import DBConfigError, ExecutableConnection, connect as _connect
 
-
-class HistoryConfigError(RuntimeError):
-    """Raised when a required LAKEHOUSE_UI_DB_* environment variable is missing."""
-
-
-class ExecutableConnection(Protocol):
-    def execute(self, sql: str, params: tuple = ()) -> Any: ...
-    def commit(self) -> None: ...
-    def close(self) -> None: ...
-
-
-_REQUIRED_ENV_VARS = (
-    "LAKEHOUSE_UI_DB_HOST",
-    "LAKEHOUSE_UI_DB_NAME",
-    "LAKEHOUSE_UI_DB_USER",
-    "LAKEHOUSE_UI_DB_PASSWORD",
-)
-
-
-def _require_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise HistoryConfigError(f"missing required environment variable {name}")
-    return value
-
-
-def _connect() -> ExecutableConnection:
-    env = {name: _require_env(name) for name in _REQUIRED_ENV_VARS}
-    import psycopg
-
-    return psycopg.connect(
-        host=env["LAKEHOUSE_UI_DB_HOST"],
-        dbname=env["LAKEHOUSE_UI_DB_NAME"],
-        user=env["LAKEHOUSE_UI_DB_USER"],
-        password=env["LAKEHOUSE_UI_DB_PASSWORD"],
-        connect_timeout=5,
-    )
+# Old name, kept as an alias — nothing importing HistoryConfigError from
+# here should need to change.
+HistoryConfigError = DBConfigError
 
 
 def ensure_schema(conn: ExecutableConnection | None = None) -> None:

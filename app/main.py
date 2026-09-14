@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -21,7 +22,13 @@ from app.polaris_client import (
     list_namespaces,
     list_tables,
 )
-from app.session import Session, create_session, delete_session, get_session
+from app.session_store import (
+    Session,
+    create_session,
+    delete_session,
+    ensure_schema as ensure_session_schema,
+    get_session,
+)
 
 app = FastAPI(title="lakehouse-ui")
 
@@ -36,6 +43,13 @@ def _init_history_schema() -> None:
         # other downstream-dependency-not-ready case this app already
         # tolerates (e.g. Polaris being briefly unreachable).
         print(f"WARNING: could not initialize query_history schema at startup: {exc}")
+
+    try:
+        ensure_session_schema()
+    except Exception as exc:  # noqa: BLE001 — same reasoning as above;
+        # login/query will fail per-request until Postgres is reachable,
+        # rather than crash-looping the whole app at startup.
+        print(f"WARNING: could not initialize sessions schema at startup: {exc}")
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -73,6 +87,15 @@ class QueryRequest(BaseModel):
 # of what the user types, matching a real query console's behavior
 # (Snowflake/BigQuery cap interactive result previews too).
 MAX_RESULT_ROWS = 10_000
+
+# Caps concurrent DuckDB executions per pod. Confirmed live (2026-09-14):
+# with no admission control at all, 5 concurrent large joins over
+# lineitem-scale data blew well past the container's memory limit and
+# OOMKilled the pod — this bounds it instead of just raising the limit
+# and hoping. A request that can't get a slot immediately fails fast with
+# 429 rather than queueing (a queue just delays the same OOM).
+MAX_CONCURRENT_QUERIES = int(os.environ.get("MAX_CONCURRENT_QUERIES", "3"))
+_query_semaphore = threading.Semaphore(MAX_CONCURRENT_QUERIES)
 
 
 class QueryResponse(BaseModel):
@@ -172,6 +195,17 @@ def run_query(
     if not request.sql.strip():
         raise HTTPException(status_code=400, detail="sql must not be empty")
 
+    if not _query_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429, detail="Too many concurrent queries — try again in a moment"
+        )
+    try:
+        return _run_query_body(request, session)
+    finally:
+        _query_semaphore.release()
+
+
+def _run_query_body(request: QueryRequest, session: Session) -> QueryResponse:
     try:
         connection = build_connection(session.client_id, session.client_secret)
     except CatalogConfigError as exc:

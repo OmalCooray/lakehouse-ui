@@ -2,7 +2,7 @@
 
 POLARIS_ENDPOINT/POLARIS_CATALOG are fixed env vars (not per-user); the
 principal's own client_id/client_secret are passed in by the caller (from
-the logged-in session — see app.session), not read from the environment.
+the logged-in session — see app.session_store), not read from the environment.
 """
 from __future__ import annotations
 
