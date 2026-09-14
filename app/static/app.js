@@ -503,7 +503,8 @@ async function runActiveWorksheet() {
       worksheet.columns = body.columns;
       worksheet.rows = body.rows;
       worksheet.truncated = body.truncated;
-      statusEl.textContent = formatQueryStatus(body.duration_ms, body.row_count, body.truncated);
+      worksheet.duration_ms = body.duration_ms;
+      worksheet.row_count = body.row_count;
     } catch (err) {
       if (err.message === 'not authenticated') {
         // Redirect to /login is already in flight; don't flash an error.
@@ -513,10 +514,15 @@ async function runActiveWorksheet() {
       worksheet.columns = [];
       worksheet.rows = [];
       worksheet.truncated = false;
-      statusEl.textContent = '';
     }
 
     if (worksheet.id !== activeWorksheetId) return;
+    // Update status text only for the active worksheet
+    if (worksheet.error) {
+      statusEl.textContent = '';
+    } else {
+      statusEl.textContent = formatQueryStatus(worksheet.duration_ms, worksheet.row_count, worksheet.truncated);
+    }
     renderResults(worksheet);
     loadHistory();
   } finally {
