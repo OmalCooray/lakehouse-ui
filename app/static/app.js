@@ -387,6 +387,13 @@ function activateWorksheet(id) {
   editor.setValue(worksheet.sql);
   renderTabs();
   renderResults(worksheet);
+
+  const statusEl = document.getElementById('query-status');
+  if (!worksheet.error && worksheet.duration_ms != null && worksheet.row_count != null) {
+    statusEl.textContent = formatQueryStatus(worksheet.duration_ms, worksheet.row_count, worksheet.truncated);
+  } else {
+    statusEl.textContent = '';
+  }
 }
 
 function closeWorksheet(id) {
