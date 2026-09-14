@@ -136,6 +136,72 @@ def get_table_schema(
         raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
 
 
+def get_table_details(
+    catalog_endpoint: str,
+    client_id: str,
+    client_secret: str,
+    catalog: str,
+    namespace: str,
+    table: str,
+) -> dict:
+    """Return richer table details than get_table_schema: fields, storage
+    location, last-updated timestamp, current snapshot's row/file counts
+    (None if the table has never been written to), and properties.
+
+    Same underlying Iceberg REST response get_table_schema already
+    fetches — no new Polaris call, just extracting more of it (confirmed
+    live against a real table, 2026-09-14)."""
+    token = _get_token(catalog_endpoint, client_id, client_secret)
+    body = _get(
+        catalog_endpoint, token, f"/v1/{catalog}/namespaces/{namespace}/tables/{table}"
+    )
+    metadata = body.get("metadata", {})
+    schemas = metadata.get("schemas", [])
+    current_schema_id = metadata.get("current-schema-id")
+    schema = next(
+        (s for s in schemas if s.get("schema-id") == current_schema_id),
+        schemas[0] if schemas else {},
+    )
+    try:
+        fields = [
+            {"name": f["name"], "type": f["type"], "required": f["required"]}
+            for f in schema.get("fields", [])
+        ]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
+
+    current_snapshot = None
+    current_snapshot_id = metadata.get("current-snapshot-id")
+    if current_snapshot_id is not None:
+        for snap in metadata.get("snapshots", []):
+            if snap.get("snapshot-id") == current_snapshot_id:
+                summary = snap.get("summary", {})
+                current_snapshot = {
+                    "operation": summary.get("operation"),
+                    "total_records": summary.get("total-records"),
+                    "total_data_files": summary.get("total-data-files"),
+                    "timestamp_ms": snap.get("timestamp-ms"),
+                }
+                break
+
+    return {
+        "fields": fields,
+        "location": metadata.get("location"),
+        "last_updated_ms": metadata.get("last-updated-ms"),
+        "current_snapshot": current_snapshot,
+        "properties": metadata.get("properties", {}),
+    }
+
+
+def get_namespace_details(
+    catalog_endpoint: str, client_id: str, client_secret: str, catalog: str, namespace: str
+) -> dict:
+    """Return a namespace's own properties (mainly its storage location)."""
+    token = _get_token(catalog_endpoint, client_id, client_secret)
+    body = _get(catalog_endpoint, token, f"/v1/{catalog}/namespaces/{namespace}")
+    return {"properties": body.get("properties", {})}
+
+
 def get_principal_roles(
     catalog_endpoint: str,
     management_endpoint: str,
