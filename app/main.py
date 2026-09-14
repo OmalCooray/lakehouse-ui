@@ -42,6 +42,22 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.middleware("http")
+async def _no_cache_for_static(request, call_next):
+    # Starlette's StaticFiles sends ETag/Last-Modified but no Cache-Control,
+    # so browsers fall back to heuristic freshness and can keep serving a
+    # pre-redeploy app.js/index.html for a long time with no revalidation —
+    # confirmed live (2026-09-14): a fix landed in a new image, the pod
+    # redeployed cleanly, and multiple fresh browser tabs still ran the old
+    # JS. `no-cache` (not `no-store`) still lets the browser revalidate via
+    # the existing ETag on a normal GET, so this costs a 304 round trip per
+    # load, not a full re-download every time.
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 class QueryRequest(BaseModel):
     sql: str
 
