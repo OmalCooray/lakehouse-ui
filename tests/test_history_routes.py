@@ -2,13 +2,12 @@ import app.main as main_module
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.session import create_session
 
 client = TestClient(app)
 
 
 def _logged_in_cookie(principal="loader"):
-    session_id = create_session("cid", "secret", principal)
+    session_id = main_module.create_session("cid", "secret", principal)
     return {"lakehouse_session": session_id}
 
 

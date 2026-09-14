@@ -3,7 +3,6 @@ from app.catalog import CatalogConfigError
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.session import create_session
 
 client = TestClient(app)
 
@@ -36,7 +35,7 @@ class FakeConnection:
 
 
 def _logged_in_cookie():
-    session_id = create_session("cid", "secret", "loader")
+    session_id = main_module.create_session("cid", "secret", "loader")
     return {"lakehouse_session": session_id}
 
 

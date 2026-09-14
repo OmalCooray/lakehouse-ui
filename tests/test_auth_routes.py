@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.polaris_auth import LoginError
-from app.session import get_session
 
 client = TestClient(app)
 
@@ -18,7 +17,7 @@ def test_login_success_sets_cookie_and_returns_principal(monkeypatch):
     assert response.json() == {"principal": "loader"}
     cookie = response.cookies.get("lakehouse_session")
     assert cookie is not None
-    assert get_session(cookie).principal_name == "loader"
+    assert main_module.get_session(cookie).principal_name == "loader"
 
 
 def test_login_failure_returns_401_and_sets_no_cookie(monkeypatch):
@@ -47,7 +46,7 @@ def test_logout_clears_the_session(monkeypatch):
     response = client.post("/logout", cookies={"lakehouse_session": cookie})
 
     assert response.status_code == 200
-    assert get_session(cookie) is None
+    assert main_module.get_session(cookie) is None
 
 
 def test_query_requires_a_session():
