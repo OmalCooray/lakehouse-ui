@@ -102,6 +102,39 @@ def test_query_reports_no_truncation_when_row_count_is_under_the_cap(monkeypatch
     assert body["truncated"] is False
 
 
+def test_query_returns_429_when_the_concurrency_limit_is_already_held(monkeypatch):
+    monkeypatch.setattr(main_module, "_query_semaphore", __import__("threading").Semaphore(0))
+    # A semaphore initialized to 0 has no permits to give — the very
+    # first acquire attempt fails, exactly like every slot already being
+    # held by other in-flight queries.
+
+    response = client.post("/query", json={"sql": "SELECT 1"}, cookies=_logged_in_cookie())
+
+    assert response.status_code == 429
+    assert "concurrent" in response.json()["detail"].lower()
+
+
+def test_query_releases_its_concurrency_slot_even_when_the_query_errors(monkeypatch):
+    import threading
+
+    class RaisingConnection:
+        def execute(self, sql):
+            raise ValueError("boom")
+
+    monkeypatch.setattr(
+        main_module, "build_connection", lambda client_id, client_secret: RaisingConnection()
+    )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
+    semaphore = threading.Semaphore(1)
+    monkeypatch.setattr(main_module, "_query_semaphore", semaphore)
+
+    response = client.post("/query", json={"sql": "SELECT 1"}, cookies=_logged_in_cookie())
+
+    assert response.status_code == 400  # the query's own error, not a 429
+    # If the slot wasn't released, this acquire would fail (already at 0).
+    assert semaphore.acquire(blocking=False) is True
+
+
 def test_query_passes_the_session_principals_own_credentials(monkeypatch):
     captured = {}
 
