@@ -99,3 +99,4 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #0f1419; color
 #results th, #results td { border: 1px solid #2a333d; padding: 0.3rem 0.6rem; text-align: left; }
 #results th { background: #141a21; }
 #error { color: #e05252; white-space: pre-wrap; margin-top: 1rem; }
+#result-notice { color: #c9a227; margin-top: 1rem; }

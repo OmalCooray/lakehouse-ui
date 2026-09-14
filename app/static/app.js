@@ -48,6 +48,7 @@ function newWorksheet(sql = '') {
     columns: [],
     rows: [],
     error: null,
+    truncated: false,
   };
   worksheets.push(worksheet);
   return worksheet;
@@ -118,12 +119,21 @@ function renderTabs() {
 
 function renderResults(worksheet) {
   const errorBox = document.getElementById('error');
+  const noticeBox = document.getElementById('result-notice');
   const table = document.getElementById('results');
   table.innerHTML = '';
   errorBox.textContent = '';
+  noticeBox.hidden = true;
+  noticeBox.textContent = '';
   if (worksheet.error) {
     errorBox.textContent = worksheet.error;
     return;
+  }
+  if (worksheet.truncated) {
+    noticeBox.hidden = false;
+    noticeBox.textContent =
+      `Showing the first ${worksheet.rows.length.toLocaleString()} rows — ` +
+      'the query returned more. Add a LIMIT to see a different slice.';
   }
   if (!worksheet.columns.length) return;
 
@@ -182,6 +192,7 @@ async function runActiveWorksheet() {
       worksheet.error = null;
       worksheet.columns = body.columns;
       worksheet.rows = body.rows;
+      worksheet.truncated = body.truncated;
     } catch (err) {
       if (err.message === 'not authenticated') {
         // Redirect to /login is already in flight; don't flash an error.
@@ -190,6 +201,7 @@ async function runActiveWorksheet() {
       worksheet.error = err.message;
       worksheet.columns = [];
       worksheet.rows = [];
+      worksheet.truncated = false;
     }
 
     if (worksheet.id !== activeWorksheetId) return;

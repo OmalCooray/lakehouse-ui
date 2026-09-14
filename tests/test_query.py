@@ -16,6 +16,13 @@ class FakeResult:
     def fetchall(self):
         return self._rows
 
+    def fetchmany(self, n):
+        # Real DuckDB cursors consume from wherever the last fetch left off;
+        # this fake only ever gets one fetchmany call per query in
+        # app.main.run_query, so a plain slice is enough to exercise the
+        # truncation logic without needing full cursor-position tracking.
+        return self._rows[:n]
+
 
 class FakeConnection:
     def __init__(self, columns, rows):
@@ -46,8 +53,54 @@ def test_query_runs_select_and_returns_rows(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body == {"columns": ["id", "name"], "rows": [[1, "a"], [2, "b"]]}
+    assert body == {
+        "columns": ["id", "name"],
+        "rows": [[1, "a"], [2, "b"]],
+        "truncated": False,
+    }
     assert fake.executed == ["SELECT * FROM nyc_taxi.trips"]
+
+
+def test_query_caps_rows_and_reports_truncation(monkeypatch):
+    # Real bug, found live (2026-09-14): an unbounded `SELECT *` against a
+    # multi-million-row table serialized the whole result set in-process,
+    # starving the GIL long enough that /healthz missed its liveness
+    # deadline and Kubernetes killed the pod mid-query. Fetching (and thus
+    # serializing) at most MAX_RESULT_ROWS is what actually prevents that,
+    # regardless of what the user's query asks for.
+    monkeypatch.setattr(main_module, "MAX_RESULT_ROWS", 3)
+    fake = FakeConnection(["id"], [[1], [2], [3], [4], [5]])
+    monkeypatch.setattr(
+        main_module, "build_connection", lambda client_id, client_secret: fake
+    )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
+
+    response = client.post(
+        "/query", json={"sql": "SELECT * FROM huge_table"}, cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows"] == [[1], [2], [3]]
+    assert body["truncated"] is True
+
+
+def test_query_reports_no_truncation_when_row_count_is_under_the_cap(monkeypatch):
+    monkeypatch.setattr(main_module, "MAX_RESULT_ROWS", 10)
+    fake = FakeConnection(["id"], [[1], [2]])
+    monkeypatch.setattr(
+        main_module, "build_connection", lambda client_id, client_secret: fake
+    )
+    monkeypatch.setattr(main_module, "record_query", lambda **kwargs: None)
+
+    response = client.post(
+        "/query", json={"sql": "SELECT * FROM small_table"}, cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rows"] == [[1], [2]]
+    assert body["truncated"] is False
 
 
 def test_query_passes_the_session_principals_own_credentials(monkeypatch):

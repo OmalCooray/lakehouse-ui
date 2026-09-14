@@ -46,9 +46,23 @@ class QueryRequest(BaseModel):
     sql: str
 
 
+# Hard cap on rows returned from any single query. Without this, an
+# unbounded `SELECT *` against a multi-million-row table (confirmed live,
+# 2026-09-14: `fct_trips`, ~2.9M rows) materializes the whole result set and
+# JSON-serializes it in this same process — Python's GIL means that
+# CPU-bound serialization loop starves every other thread, including the
+# one answering /healthz, long enough that Kubernetes' liveness probe times
+# out and kills the pod mid-query. Capping the fetch itself (not just
+# truncating after the fact) keeps a huge/unbounded query cheap regardless
+# of what the user types, matching a real query console's behavior
+# (Snowflake/BigQuery cap interactive result previews too).
+MAX_RESULT_ROWS = 10_000
+
+
 class QueryResponse(BaseModel):
     columns: list[str]
     rows: list[list]
+    truncated: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -155,7 +169,11 @@ def run_query(
     try:
         result = connection.execute(request.sql)
         columns = [d[0] for d in result.description] if result.description else []
-        rows = [list(row) for row in result.fetchall()]
+        # Fetch one row past the cap so we can tell "exactly MAX_RESULT_ROWS
+        # rows" apart from "more rows exist" without a second query.
+        fetched = result.fetchmany(MAX_RESULT_ROWS + 1)
+        truncated = len(fetched) > MAX_RESULT_ROWS
+        rows = [list(row) for row in fetched[:MAX_RESULT_ROWS]]
     except Exception as exc:  # DuckDB/catalog errors surface as plain Exceptions
         duration_ms = int((time.monotonic() - started_at) * 1000)
         try:
@@ -186,7 +204,7 @@ def run_query(
     except Exception as history_exc:  # noqa: BLE001 — history logging must never
         # affect the response the user gets.
         print(f"WARNING: failed to record query history: {history_exc}")
-    return QueryResponse(columns=columns, rows=rows)
+    return QueryResponse(columns=columns, rows=rows, truncated=truncated)
 
 
 @app.get("/catalog/namespaces")

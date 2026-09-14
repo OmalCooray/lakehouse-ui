@@ -20,6 +20,9 @@ class FakeResult:
     def fetchall(self):
         return self._rows
 
+    def fetchmany(self, n):
+        return self._rows[:n]
+
 
 class FakeConnection:
     def __init__(self, columns, rows):
