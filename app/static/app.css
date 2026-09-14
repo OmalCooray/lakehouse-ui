@@ -145,3 +145,16 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #0f1419; color
 .new-table-column-row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.3rem; }
 .new-table-column-row input[type="text"] { width: auto; flex: 1; margin-bottom: 0; }
 .new-table-col-required { font-size: 0.75rem; color: #8a95a1; white-space: nowrap; }
+.detail-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.2rem 0; font-size: 0.85rem; }
+.detail-label { color: #8a95a1; }
+.detail-schema-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.8rem; }
+.detail-schema-table th, .detail-schema-table td { border: 1px solid #2a333d; padding: 0.25rem 0.5rem; text-align: left; }
+#save-as-table-btn {
+  background: none;
+  border: 1px solid #2a333d;
+  color: #8a95a1;
+  padding: 0.35rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}

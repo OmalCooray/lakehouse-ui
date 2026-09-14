@@ -238,6 +238,110 @@ async function submitDeleteTable(namespace, table) {
   loadCatalog();
 }
 
+async function openTableDetailsModal(namespace, table) {
+  openModal('<h3>' + namespace + '.' + table + '</h3><p>Loading…</p>');
+  let details;
+  try {
+    details = await apiFetch(
+      '/catalog/tables/' + encodeURIComponent(namespace) + '/' + encodeURIComponent(table) + '/details'
+    );
+  } catch (err) {
+    if (err.message === 'not authenticated') return;
+    openModal(
+      '<h3>' + namespace + '.' + table + '</h3><p class="modal-error">' + err.message +
+      '</p><div class="modal-actions"><button class="secondary" id="details-close" type="button">Close</button></div>'
+    );
+    document.getElementById('details-close').addEventListener('click', closeModal);
+    return;
+  }
+  const snap = details.current_snapshot;
+  const rowsHtml = `
+    <div class="detail-row"><span class="detail-label">Location</span><span class="detail-value">${details.location || '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Last updated</span><span class="detail-value">${details.last_updated_ms ? new Date(details.last_updated_ms).toISOString() : '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Rows</span><span class="detail-value">${snap ? Number(snap.total_records).toLocaleString() : '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Data files</span><span class="detail-value">${snap ? snap.total_data_files : '—'}</span></div>
+  `;
+  const schemaRows = details.fields
+    .map((f) => `<tr><td>${f.name}</td><td>${f.type}</td><td>${f.required ? 'NOT NULL' : ''}</td></tr>`)
+    .join('');
+  openModal(`
+    <h3>${namespace}.${table}</h3>
+    ${rowsHtml}
+    <table class="detail-schema-table"><thead><tr><th>Column</th><th>Type</th><th></th></tr></thead><tbody>${schemaRows}</tbody></table>
+    <div class="modal-actions"><button class="secondary" id="details-close" type="button">Close</button></div>
+  `);
+  document.getElementById('details-close').addEventListener('click', closeModal);
+}
+
+async function openNamespaceDetailsModal(namespace) {
+  openModal('<h3>' + namespace + '</h3><p>Loading…</p>');
+  let details;
+  try {
+    details = await apiFetch('/catalog/namespaces/' + encodeURIComponent(namespace) + '/details');
+  } catch (err) {
+    if (err.message === 'not authenticated') return;
+    openModal(
+      '<h3>' + namespace + '</h3><p class="modal-error">' + err.message +
+      '</p><div class="modal-actions"><button class="secondary" id="ns-details-close" type="button">Close</button></div>'
+    );
+    document.getElementById('ns-details-close').addEventListener('click', closeModal);
+    return;
+  }
+  openModal(`
+    <h3>${namespace}</h3>
+    <div class="detail-row"><span class="detail-label">Location</span><span class="detail-value">${(details.properties && details.properties.location) || '—'}</span></div>
+    <div class="detail-row"><span class="detail-label">Tables</span><span class="detail-value">${details.table_count}</span></div>
+    <div class="modal-actions"><button class="secondary" id="ns-details-close" type="button">Close</button></div>
+  `);
+  document.getElementById('ns-details-close').addEventListener('click', closeModal);
+}
+
+function openSaveAsTableModal() {
+  const worksheet = worksheets.find((w) => w.id === activeWorksheetId);
+  if (!worksheet || !worksheet.columns.length) return;
+  openModal(`
+    <h3>Save results as table</h3>
+    <label for="save-table-namespace">Dataset</label>
+    <input type="text" id="save-table-namespace" autocomplete="off" placeholder="nyc_taxi">
+    <label for="save-table-name">Table name</label>
+    <input type="text" id="save-table-name" autocomplete="off">
+    <div class="modal-error" id="save-table-error"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="save-table-cancel" type="button">Cancel</button>
+      <button class="primary" id="save-table-create" type="button">Save</button>
+    </div>
+  `);
+  document.getElementById('save-table-cancel').addEventListener('click', closeModal);
+  document.getElementById('save-table-create').addEventListener('click', submitSaveAsTable);
+  document.getElementById('save-table-namespace').focus();
+}
+
+async function submitSaveAsTable() {
+  const worksheet = worksheets.find((w) => w.id === activeWorksheetId);
+  const errorEl = document.getElementById('save-table-error');
+  const namespace = document.getElementById('save-table-namespace').value.trim();
+  const name = document.getElementById('save-table-name').value.trim();
+  if (!namespace || !name) {
+    errorEl.textContent = 'Dataset and table name are both required.';
+    return;
+  }
+  const originalSql = worksheet.sql.trim();
+  const sql = `CREATE TABLE lakehouse.${namespace}.${name} AS ${originalSql}`;
+  try {
+    await apiFetch('/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql }),
+    });
+  } catch (err) {
+    if (err.message === 'not authenticated') return;
+    errorEl.textContent = err.message;
+    return;
+  }
+  closeModal();
+  loadCatalog();
+}
+
 function newWorksheet(sql = '') {
   const id = 'ws-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
   const worksheet = {
@@ -440,6 +544,15 @@ async function loadCatalog() {
 
     const nsActions = document.createElement('div');
     nsActions.className = 'tree-row-actions';
+    const nsDetailsBtn = document.createElement('button');
+    nsDetailsBtn.type = 'button';
+    nsDetailsBtn.textContent = 'ⓘ';
+    nsDetailsBtn.title = 'Details for ' + ns;
+    nsDetailsBtn.setAttribute('aria-label', 'Details for ' + ns);
+    nsDetailsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openNamespaceDetailsModal(ns);
+    });
     const addTableBtn = document.createElement('button');
     addTableBtn.type = 'button';
     addTableBtn.textContent = '+';
@@ -458,6 +571,7 @@ async function loadCatalog() {
       e.stopPropagation();
       confirmDeleteDataset(ns);
     });
+    nsActions.appendChild(nsDetailsBtn);
     nsActions.appendChild(addTableBtn);
     nsActions.appendChild(deleteNsBtn);
 
@@ -492,6 +606,15 @@ async function loadCatalog() {
 
             const tActions = document.createElement('div');
             tActions.className = 'tree-row-actions';
+            const detailsBtn = document.createElement('button');
+            detailsBtn.type = 'button';
+            detailsBtn.textContent = 'ⓘ';
+            detailsBtn.title = 'Details for ' + t;
+            detailsBtn.setAttribute('aria-label', 'Details for ' + t);
+            detailsBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              openTableDetailsModal(ns, t);
+            });
             const deleteTBtn = document.createElement('button');
             deleteTBtn.type = 'button';
             deleteTBtn.textContent = '🗑';
@@ -501,6 +624,7 @@ async function loadCatalog() {
               e.stopPropagation();
               confirmDeleteTable(ns, t);
             });
+            tActions.appendChild(detailsBtn);
             tActions.appendChild(deleteTBtn);
 
             tRow.appendChild(tEl);
@@ -595,6 +719,7 @@ function init() {
   renderTabs();
 
   document.getElementById('run-btn').addEventListener('click', runActiveWorksheet);
+  document.getElementById('save-as-table-btn').addEventListener('click', openSaveAsTableModal);
   document.getElementById('tab-catalog').addEventListener('click', () => showSidebarPanel('catalog'));
   document.getElementById('tab-history').addEventListener('click', () => showSidebarPanel('history'));
   document.getElementById('refresh-catalog').addEventListener('click', loadCatalog);
