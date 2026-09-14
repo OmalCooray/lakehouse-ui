@@ -14,6 +14,7 @@
         <button id="tab-catalog" class="sidebar-tab active" type="button">Catalog</button>
         <button id="tab-history" class="sidebar-tab" type="button">History</button>
         <button id="refresh-catalog" type="button" title="Refresh catalog" aria-label="Refresh catalog">⟳</button>
+        <button id="new-dataset-btn" type="button">+ Dataset</button>
       </div>
       <div id="catalog-tree" class="sidebar-panel"></div>
       <div id="history-list" class="sidebar-panel" hidden></div>
@@ -37,6 +38,10 @@
         <div id="error"></div>
       </div>
     </div>
+  </div>
+
+  <div id="modal-overlay" hidden>
+    <div id="modal-box"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" integrity="sha512-OeZ4Yrb/W7d2W4rAMOO0HQ9Ro/aWLtpW9BUSR2UOWnSV2hprXLkkYnnCGc9NeLUxxE4ZG7zN16UuT1Elqq8Opg==" crossorigin="anonymous"></script>
