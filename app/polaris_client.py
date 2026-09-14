@@ -232,3 +232,62 @@ def get_principal_roles(
         return [role["name"] for role in body.get("roles", [])]
     except (KeyError, TypeError) as exc:
         raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
+
+
+def list_principals(
+    catalog_endpoint: str, management_endpoint: str, client_id: str, client_secret: str
+) -> list[str]:
+    """Return the names of every principal Polaris knows about.
+
+    Root-only in practice: a regular principal gets a 403
+    (LIST_PRINCIPALS not authorized) — confirmed live, 2026-09-14."""
+    token = _get_token(catalog_endpoint, client_id, client_secret)
+    body = _get(management_endpoint, token, "/v1/principals")
+    try:
+        return [p["name"] for p in body.get("principals", [])]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
+
+
+def get_catalog_roles_for_principal_role(
+    catalog_endpoint: str,
+    management_endpoint: str,
+    client_id: str,
+    client_secret: str,
+    catalog: str,
+    principal_role: str,
+) -> list[str]:
+    """Return the catalog role names assigned to `principal_role` on
+    `catalog`. Root-only, same reasoning as list_principals."""
+    token = _get_token(catalog_endpoint, client_id, client_secret)
+    body = _get(
+        management_endpoint,
+        token,
+        f"/v1/principal-roles/{principal_role}/catalog-roles/{catalog}",
+    )
+    try:
+        return [r["name"] for r in body.get("roles", [])]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc
+
+
+def get_grants_for_catalog_role(
+    catalog_endpoint: str,
+    management_endpoint: str,
+    client_id: str,
+    client_secret: str,
+    catalog: str,
+    catalog_role: str,
+) -> list[str]:
+    """Return the privilege names granted to `catalog_role` on `catalog`.
+    Root-only, same reasoning as list_principals."""
+    token = _get_token(catalog_endpoint, client_id, client_secret)
+    body = _get(
+        management_endpoint,
+        token,
+        f"/v1/catalogs/{catalog}/catalog-roles/{catalog_role}/grants",
+    )
+    try:
+        return [g["privilege"] for g in body.get("grants", [])]
+    except (KeyError, TypeError) as exc:
+        raise PolarisClientError(f"unexpected response shape from Polaris: {exc}") from exc

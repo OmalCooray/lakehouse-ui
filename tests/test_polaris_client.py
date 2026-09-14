@@ -6,11 +6,14 @@ import pytest
 
 from app.polaris_client import (
     PolarisClientError,
+    get_catalog_roles_for_principal_role,
+    get_grants_for_catalog_role,
     get_namespace_details,
     get_principal_roles,
     get_table_details,
     get_table_schema,
     list_namespaces,
+    list_principals,
     list_tables,
 )
 
@@ -384,6 +387,76 @@ def test_get_token_does_not_blame_credentials_for_a_server_error(monkeypatch):
         list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
 
     assert "invalid client_id or client_secret" not in str(exc_info.value)
+
+
+def test_list_principals_returns_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "principals": {
+                    "principals": [{"name": "root"}, {"name": "loader"}, {"name": "lakehouse-ui"}]
+                },
+            }
+        ),
+    )
+
+    result = list_principals(
+        "http://polaris:8181/api/catalog", "http://polaris:8181/api/management", "root", "rootsecret"
+    )
+
+    assert result == ["root", "loader", "lakehouse-ui"]
+
+
+def test_get_catalog_roles_for_principal_role_returns_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "principal-roles/loader_role/catalog-roles/lakehouse": {
+                    "roles": [{"name": "loader_catalog_role"}]
+                },
+            }
+        ),
+    )
+
+    result = get_catalog_roles_for_principal_role(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "lakehouse",
+        "loader_role",
+    )
+
+    assert result == ["loader_catalog_role"]
+
+
+def test_get_grants_for_catalog_role_returns_privilege_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "catalogs/lakehouse/catalog-roles/loader_catalog_role/grants": {
+                    "grants": [{"privilege": "CATALOG_MANAGE_CONTENT", "type": "catalog"}]
+                },
+            }
+        ),
+    )
+
+    result = get_grants_for_catalog_role(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "lakehouse",
+        "loader_catalog_role",
+    )
+
+    assert result == ["CATALOG_MANAGE_CONTENT"]
 
 
 def test_list_tables_raises_polaris_client_error_on_unexpected_shape(monkeypatch):
