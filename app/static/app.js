@@ -101,6 +101,7 @@ async function submitCreateDataset() {
     errorEl.textContent = err.message;
     return;
   }
+  showToast(`Dataset "${name}" created.`);
   closeModal();
   loadCatalog();
 }
@@ -132,6 +133,7 @@ async function submitDeleteDataset(name) {
     errorEl.textContent = err.message;
     return;
   }
+  showToast(`Dataset "${name}" deleted.`);
   closeModal();
   loadCatalog();
 }
@@ -218,6 +220,7 @@ async function submitCreateTable(namespace) {
     errorEl.textContent = err.message;
     return;
   }
+  showToast(`Table "${namespace}.${name}" created.`);
   closeModal();
   loadCatalog();
 }
@@ -249,6 +252,7 @@ async function submitDeleteTable(namespace, table) {
     errorEl.textContent = err.message;
     return;
   }
+  showToast(`Table "${namespace}.${table}" deleted.`);
   closeModal();
   loadCatalog();
 }
@@ -353,6 +357,7 @@ async function submitSaveAsTable() {
     errorEl.textContent = err.message;
     return;
   }
+  showToast(`Saved as table "${namespace}.${name}".`);
   closeModal();
   loadCatalog();
 }
