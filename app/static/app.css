@@ -177,7 +177,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #0f1419; color
   transform: translateY(0);
 }
 .tree-namespace-row, .tree-table-row { display: flex; align-items: center; justify-content: space-between; }
-.tree-row-actions { display: flex; gap: 0.4rem; opacity: 0.4; }
+.tree-row-actions { display: flex; gap: 0.4rem; opacity: 0.6; }
 .tree-namespace-row:hover .tree-row-actions,
 .tree-namespace-row:focus-within .tree-row-actions,
 .tree-table-row:hover .tree-row-actions,
