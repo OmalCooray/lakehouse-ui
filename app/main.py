@@ -17,7 +17,9 @@ from app.polaris_auth import LoginError
 from app.polaris_auth import login as polaris_login
 from app.polaris_client import (
     PolarisClientError,
+    get_namespace_details,
     get_principal_roles,
+    get_table_details,
     get_table_schema,
     list_namespaces,
     list_tables,
@@ -293,6 +295,38 @@ def catalog_table_schema(
     except PolarisClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"fields": fields}
+
+
+@app.get("/catalog/tables/{namespace}/{table}/details")
+def catalog_table_details(
+    namespace: str, table: str, session: Session = Depends(require_session)
+) -> dict:
+    endpoint, catalog = _catalog_config()
+    try:
+        details = get_table_details(
+            endpoint, session.client_id, session.client_secret, catalog, namespace, table
+        )
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return details
+
+
+@app.get("/catalog/namespaces/{namespace}/details")
+def catalog_namespace_details(
+    namespace: str, session: Session = Depends(require_session)
+) -> dict:
+    endpoint, catalog = _catalog_config()
+    try:
+        details = get_namespace_details(
+            endpoint, session.client_id, session.client_secret, catalog, namespace
+        )
+        tables = list_tables(
+            endpoint, session.client_id, session.client_secret, catalog, namespace
+        )
+    except PolarisClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    details["table_count"] = len(tables)
+    return details
 
 
 @app.get("/me")

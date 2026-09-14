@@ -148,3 +148,90 @@ def test_namespaces_returns_502_on_polaris_client_error(monkeypatch):
 
     assert response.status_code == 502
     assert "403" in response.json()["detail"]
+
+
+def test_table_details_returns_the_details_dict(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+    fake_details = {
+        "fields": [{"name": "id", "type": "long", "required": True}],
+        "location": "s3://lakehouse/nyc_taxi/trips",
+        "last_updated_ms": 123,
+        "current_snapshot": {
+            "operation": "overwrite",
+            "total_records": "100",
+            "total_data_files": "2",
+            "timestamp_ms": 123,
+        },
+        "properties": {},
+    }
+    monkeypatch.setattr(main_module, "get_table_details", lambda *a, **kw: fake_details)
+
+    response = client.get(
+        "/catalog/tables/nyc_taxi/trips/details", cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 200
+    assert response.json() == fake_details
+
+
+def test_table_details_returns_502_on_polaris_client_error(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+
+    def raise_error(*a, **kw):
+        raise PolarisClientError("not authorized for op (403)")
+
+    monkeypatch.setattr(main_module, "get_table_details", raise_error)
+
+    response = client.get(
+        "/catalog/tables/nyc_taxi/trips/details", cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 502
+
+
+def test_table_details_requires_a_session():
+    response = client.get("/catalog/tables/nyc_taxi/trips/details")
+    assert response.status_code == 401
+
+
+def test_namespace_details_returns_properties_and_table_count(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+    monkeypatch.setattr(
+        main_module, "get_namespace_details",
+        lambda *a, **kw: {"properties": {"location": "s3://lakehouse/nyc_taxi/"}},
+    )
+    monkeypatch.setattr(main_module, "list_tables", lambda *a, **kw: ["trips", "fct_trips"])
+
+    response = client.get(
+        "/catalog/namespaces/nyc_taxi/details", cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "properties": {"location": "s3://lakehouse/nyc_taxi/"},
+        "table_count": 2,
+    }
+
+
+def test_namespace_details_returns_502_on_polaris_client_error(monkeypatch):
+    monkeypatch.setenv("POLARIS_ENDPOINT", "http://polaris:8181/api/catalog")
+    monkeypatch.setenv("POLARIS_CATALOG", "lakehouse")
+
+    def raise_error(*a, **kw):
+        raise PolarisClientError("not authorized (403)")
+
+    monkeypatch.setattr(main_module, "get_namespace_details", raise_error)
+
+    response = client.get(
+        "/catalog/namespaces/nyc_taxi/details", cookies=_logged_in_cookie()
+    )
+
+    assert response.status_code == 502
+
+
+def test_namespace_details_requires_a_session():
+    response = client.get("/catalog/namespaces/nyc_taxi/details")
+    assert response.status_code == 401
