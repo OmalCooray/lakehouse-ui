@@ -6,9 +6,14 @@ import pytest
 
 from app.polaris_client import (
     PolarisClientError,
+    get_catalog_roles_for_principal_role,
+    get_grants_for_catalog_role,
+    get_namespace_details,
     get_principal_roles,
+    get_table_details,
     get_table_schema,
     list_namespaces,
+    list_principals,
     list_tables,
 )
 
@@ -111,6 +116,109 @@ def test_get_table_schema_returns_fields_from_the_current_schema(monkeypatch):
         {"name": "VendorID", "type": "int", "required": False},
         {"name": "trip_distance", "type": "double", "required": False},
     ]
+
+
+def test_get_table_details_returns_fields_location_and_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "namespaces/nyc_taxi/tables/trips": {
+                    "metadata": {
+                        "location": "s3://lakehouse/nyc_taxi/trips",
+                        "last-updated-ms": 1789357660542,
+                        "current-schema-id": 0,
+                        "current-snapshot-id": 999,
+                        "schemas": [
+                            {
+                                "schema-id": 0,
+                                "fields": [
+                                    {"name": "VendorID", "type": "int", "required": False},
+                                ],
+                            }
+                        ],
+                        "snapshots": [
+                            {
+                                "snapshot-id": 999,
+                                "timestamp-ms": 1789357660542,
+                                "summary": {
+                                    "operation": "overwrite",
+                                    "total-records": "2964624",
+                                    "total-data-files": "5",
+                                },
+                            }
+                        ],
+                        "properties": {"created-at": "2026-09-14T03:47:19Z"},
+                    }
+                },
+            }
+        ),
+    )
+
+    result = get_table_details(
+        "http://polaris:8181/api/catalog", "cid", "secret", "lakehouse", "nyc_taxi", "trips"
+    )
+
+    assert result == {
+        "fields": [{"name": "VendorID", "type": "int", "required": False}],
+        "location": "s3://lakehouse/nyc_taxi/trips",
+        "last_updated_ms": 1789357660542,
+        "current_snapshot": {
+            "operation": "overwrite",
+            "total_records": "2964624",
+            "total_data_files": "5",
+            "timestamp_ms": 1789357660542,
+        },
+        "properties": {"created-at": "2026-09-14T03:47:19Z"},
+    }
+
+
+def test_get_table_details_current_snapshot_is_none_for_an_empty_table(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "namespaces/nyc_taxi/tables/empty_table": {
+                    "metadata": {
+                        "location": "s3://lakehouse/nyc_taxi/empty_table",
+                        "last-updated-ms": 123,
+                        "current-schema-id": 0,
+                        "current-snapshot-id": None,
+                        "schemas": [{"schema-id": 0, "fields": []}],
+                        "snapshots": [],
+                        "properties": {},
+                    }
+                },
+            }
+        ),
+    )
+
+    result = get_table_details(
+        "http://polaris:8181/api/catalog", "cid", "secret", "lakehouse", "nyc_taxi", "empty_table"
+    )
+
+    assert result["current_snapshot"] is None
+    assert result["fields"] == []
+
+
+def test_get_namespace_details_returns_properties(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "namespaces/nyc_taxi": {"properties": {"location": "s3://lakehouse/nyc_taxi/"}},
+            }
+        ),
+    )
+
+    result = get_namespace_details(
+        "http://polaris:8181/api/catalog", "cid", "secret", "lakehouse", "nyc_taxi"
+    )
+
+    assert result == {"properties": {"location": "s3://lakehouse/nyc_taxi/"}}
 
 
 def test_get_principal_roles_returns_role_names(monkeypatch):
@@ -279,6 +387,76 @@ def test_get_token_does_not_blame_credentials_for_a_server_error(monkeypatch):
         list_namespaces("http://polaris:8181/api/catalog", "cid", "secret", "lakehouse")
 
     assert "invalid client_id or client_secret" not in str(exc_info.value)
+
+
+def test_list_principals_returns_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "principals": {
+                    "principals": [{"name": "root"}, {"name": "loader"}, {"name": "lakehouse-ui"}]
+                },
+            }
+        ),
+    )
+
+    result = list_principals(
+        "http://polaris:8181/api/catalog", "http://polaris:8181/api/management", "root", "rootsecret"
+    )
+
+    assert result == ["root", "loader", "lakehouse-ui"]
+
+
+def test_get_catalog_roles_for_principal_role_returns_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "principal-roles/loader_role/catalog-roles/lakehouse": {
+                    "roles": [{"name": "loader_catalog_role"}]
+                },
+            }
+        ),
+    )
+
+    result = get_catalog_roles_for_principal_role(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "lakehouse",
+        "loader_role",
+    )
+
+    assert result == ["loader_catalog_role"]
+
+
+def test_get_grants_for_catalog_role_returns_privilege_names(monkeypatch):
+    monkeypatch.setattr(
+        "app.polaris_client.urllib.request.urlopen",
+        _fake_urlopen(
+            {
+                "oauth/tokens": TOKEN_RESPONSE,
+                "catalogs/lakehouse/catalog-roles/loader_catalog_role/grants": {
+                    "grants": [{"privilege": "CATALOG_MANAGE_CONTENT", "type": "catalog"}]
+                },
+            }
+        ),
+    )
+
+    result = get_grants_for_catalog_role(
+        "http://polaris:8181/api/catalog",
+        "http://polaris:8181/api/management",
+        "root",
+        "rootsecret",
+        "lakehouse",
+        "loader_catalog_role",
+    )
+
+    assert result == ["CATALOG_MANAGE_CONTENT"]
 
 
 def test_list_tables_raises_polaris_client_error_on_unexpected_shape(monkeypatch):
