@@ -673,14 +673,57 @@ async function loadHistory() {
   });
 }
 
+async function loadAccess() {
+  const panel = document.getElementById('access-panel');
+  panel.textContent = 'Loading...';
+  let principals;
+  try {
+    const body = await apiFetch('/access');
+    principals = body.principals;
+  } catch (err) {
+    if (err.message === 'not authenticated') return;
+    panel.textContent = 'Failed to load access: ' + err.message;
+    return;
+  }
+
+  panel.innerHTML = '';
+  principals.forEach((p) => {
+    const pEl = document.createElement('div');
+    pEl.className = 'access-principal';
+    const pName = document.createElement('div');
+    pName.className = 'access-principal-name';
+    pName.textContent = p.name;
+    pEl.appendChild(pName);
+
+    p.principal_roles.forEach((pr) => {
+      const prEl = document.createElement('div');
+      prEl.className = 'access-principal-role';
+      prEl.textContent = pr.name;
+      pEl.appendChild(prEl);
+
+      pr.catalog_roles.forEach((cr) => {
+        const crEl = document.createElement('div');
+        crEl.className = 'access-catalog-role';
+        crEl.textContent = cr.name + ': ' + cr.grants.join(', ');
+        pEl.appendChild(crEl);
+      });
+    });
+
+    panel.appendChild(pEl);
+  });
+}
+
 // --- Sidebar panel switching ----------------------------------------------
 
 function showSidebarPanel(panel) {
   document.getElementById('catalog-tree').hidden = panel !== 'catalog';
   document.getElementById('history-list').hidden = panel !== 'history';
+  document.getElementById('access-panel').hidden = panel !== 'access';
   document.getElementById('tab-catalog').classList.toggle('active', panel === 'catalog');
   document.getElementById('tab-history').classList.toggle('active', panel === 'history');
+  document.getElementById('tab-access').classList.toggle('active', panel === 'access');
   if (panel === 'history') loadHistory();
+  if (panel === 'access') loadAccess();
 }
 
 // --- Whoami / logout --------------------------------------------------
@@ -722,6 +765,7 @@ function init() {
   document.getElementById('save-as-table-btn').addEventListener('click', openSaveAsTableModal);
   document.getElementById('tab-catalog').addEventListener('click', () => showSidebarPanel('catalog'));
   document.getElementById('tab-history').addEventListener('click', () => showSidebarPanel('history'));
+  document.getElementById('tab-access').addEventListener('click', () => showSidebarPanel('access'));
   document.getElementById('refresh-catalog').addEventListener('click', loadCatalog);
   document.getElementById('new-dataset-btn').addEventListener('click', openCreateDatasetModal);
   document.getElementById('logout-btn').addEventListener('click', logout);
