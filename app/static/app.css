@@ -156,6 +156,26 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #0f1419; color
 #modal-box button.primary { background: #2b8a6b; color: white; border: none; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; }
 #modal-box button.secondary { background: none; border: 1px solid #2a333d; color: #8a95a1; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; }
 #modal-box .modal-error { color: #e05252; font-size: 0.85rem; margin-top: 0.5rem; }
+#toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background: #141a21;
+  border: 1px solid #2b8a6b;
+  color: #e8edf2;
+  padding: 0.6rem 1rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  z-index: 200;
+}
+#toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 .tree-namespace-row, .tree-table-row { display: flex; align-items: center; justify-content: space-between; }
 .tree-row-actions { display: flex; gap: 0.4rem; opacity: 0; }
 .tree-namespace-row:hover .tree-row-actions, .tree-table-row:hover .tree-row-actions { opacity: 1; }

@@ -51,6 +51,21 @@ function closeModal() {
   document.getElementById('modal-box').innerHTML = '';
 }
 
+let toastTimer = null;
+
+function showToast(message) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('visible');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
+}
+
 function openCreateDatasetModal() {
   openModal(`
     <h3>New dataset</h3>
